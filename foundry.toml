@@ -2,7 +2,9 @@
 src = "src"
 out = "out"
 libs = ["dependencies"]
-
+remappings = [
+    "forge-std/=dependencies/forge-std-1.9.7/src/"
+]
 [dependencies]
 forge-std = "1.9.7"
 
