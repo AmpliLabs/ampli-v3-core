@@ -6,11 +6,12 @@ import {FungibleConfigurationMap} from "./FungibleConfigurationMap.sol";
 import {NonFungibleAssetSet} from "./NonFungibleAssetsSet.sol";
 import {NonFungibleAssetId} from "./NonFungibleAssetId.sol";
 import {Math} from "../libraries/Math.sol";
-import {ShareMath} from "../libraries/ShareMath.sol";
 import {FungibleAssetParams} from "./FungibleAssetParams.sol";
+import {BorrowShare} from "./BorrowShare.sol";
 
 struct Position {
-    uint128 borrowShares;
+    address owner;
+    BorrowShare borrowShares;
     FungibleConfigurationMap funibles;
     mapping(uint256 id => uint256 balance) collateralFungibleAssets;
     NonFungibleAssetSet nonFungibleAssets;
@@ -19,7 +20,6 @@ struct Position {
 using PositionLibrary for Position global;
 
 library PositionLibrary {
-    using ShareMath for uint256;
     using Math for uint256;
 
     error PositionAlreadyContainsNonFungibleItem();
@@ -56,6 +56,10 @@ library PositionLibrary {
         require(isExist, PositionDoesNotContainNonFungibleItem());
     }
 
+    function borrow(Position storage self, BorrowShare share) internal {
+        self.borrowShares = self.borrowShares + share;
+    }
+
     function isHealthy(
         Position storage self,
         mapping(uint256 => FungibleAssetParams) storage fungibleAssetParams,
@@ -63,13 +67,13 @@ library PositionLibrary {
         IOracle oracle,
         uint256 reserveCount,
         uint256 totalBorrowAsset,
-        uint256 totalBorrowShare
+        BorrowShare totalBorrowShare
     ) internal view returns (bool) {
         if (self.funibles.isZero() && (self.nonFungibleAssets.length() > 0)) {
             return false;
         }
 
-        uint256 borrowed = uint256(self.borrowShares).toAssetsUp(totalBorrowAsset, totalBorrowShare);
+        uint256 borrowed = self.borrowShares.toAssetsUp(totalBorrowAsset, totalBorrowShare);
         uint256 maxBorrow = 0;
 
         for (uint256 i = 0; i < reserveCount; i++) {
