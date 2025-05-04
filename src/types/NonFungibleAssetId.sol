@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.29;
 
 /// @dev Layout: address nft | uint96 tokenId
 type NonFungibleAssetId is bytes32;

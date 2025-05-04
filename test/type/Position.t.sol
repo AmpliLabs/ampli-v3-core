@@ -10,6 +10,7 @@ contract PositionTest is Test {
     error PositionDoesNotContainNonFungibleItem();
 
     Position public position;
+    bytes32 internal _ZERO_SENTINEL = 0x0000000000000000000000000000000000000000000000fbb67fda52d4bfb8bf;
 
     function test_fuzz_addFungible(uint8 fungibleAssetId, uint256 amount) public {
         position.addFungible(fungibleAssetId, amount);
@@ -39,6 +40,8 @@ contract PositionTest is Test {
     }
 
     function test_fuzz_addNonFungible(NonFungibleAssetId assteId) public {
+        vm.assume(NonFungibleAssetId.unwrap(assteId) != _ZERO_SENTINEL);
+
         position.addNonFungible(assteId);
 
         assertEq(position.nonFungibleAssets.length(), 1);
@@ -46,12 +49,16 @@ contract PositionTest is Test {
 
     /// forge-config: default.allow_internal_expect_revert = true
     function test_fuzz_addDupNonFungible(NonFungibleAssetId assteId) public {
+        vm.assume(NonFungibleAssetId.unwrap(assteId) != _ZERO_SENTINEL);
+
         position.addNonFungible(assteId);
         vm.expectRevert(PositionAlreadyContainsNonFungibleItem.selector);
         position.addNonFungible(assteId);
     }
 
     function test_fuzz_removeNonFungible(NonFungibleAssetId assteId) public {
+        vm.assume(NonFungibleAssetId.unwrap(assteId) != _ZERO_SENTINEL);
+
         position.addNonFungible(assteId);
         position.removeNonFungible(assteId);
 
@@ -60,7 +67,13 @@ contract PositionTest is Test {
 
     /// forge-config: default.allow_internal_expect_revert = true
     function test_fuzz_removeNonFungibleNonExist(NonFungibleAssetId assteId) public {
+        vm.assume(NonFungibleAssetId.unwrap(assteId) != _ZERO_SENTINEL);
+
         vm.expectRevert(PositionDoesNotContainNonFungibleItem.selector);
         position.removeNonFungible(assteId);
     }
+
+    // function test_isNotHealthy() public {
+    //     // assertFalse(position.isHealthy());
+    // }
 }

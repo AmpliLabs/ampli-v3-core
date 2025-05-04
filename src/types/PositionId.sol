@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.29;
 
 /// @dev Layout: address owner | 32 empty | uint64 index
 type PositionId is bytes32;
