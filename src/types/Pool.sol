@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import {PositionId} from "./PositionId.sol";
 import {Position} from "./Position.sol";
 import {FungibleAssetParams} from "./FungibleAssetParams.sol";
 import {NonFungibleAssetId} from "./NonFungibleAssetId.sol";
@@ -15,7 +14,7 @@ struct Pool {
     mapping(uint256 fungibleAssetId => FungibleAssetParams) fungibleAssetParams;
     mapping(address nft => bool isCollateral) isNFTCollateral;
     mapping(address nft => uint256 lltv) nonFungibleAssetParams;
-    mapping(PositionId => Position) positions;
+    mapping(uint256 id => Position) positions;
 }
 
 using PoolLibrary for Pool global;
@@ -35,10 +34,7 @@ library PoolLibrary {
     }
 
     function enableFungibleCollateral(Pool storage self, address reserve, uint96 lltv) external {
-        self.fungibleAssetParams[self.reservesCount] = FungibleAssetParams({
-            asset: reserve,
-            lltv: lltv
-        });
+        self.fungibleAssetParams[self.reservesCount] = FungibleAssetParams({asset: reserve, lltv: lltv});
 
         self.reservesCount += 1;
     }
@@ -51,7 +47,9 @@ library PoolLibrary {
     /* SUPPLY MANAGEMENT */
 
     // TODO: pool id in position id
-    function supplyFungibleCollateral(Pool storage self, PositionId positionId, uint256 fungibleAssetId, uint256 amount) external {
+    function supplyFungibleCollateral(Pool storage self, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
+        external
+    {
         address fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
         require(fungibleAddress != address(0), InvaildFungibleAsset());
 
@@ -66,7 +64,11 @@ library PoolLibrary {
         // TODO: checkout position
     }
 
-    function supplyNonFungibleCollateral(Pool storage self, PositionId positionId, NonFungibleAssetId nonFungibleAssetId) external {
+    function supplyNonFungibleCollateral(
+        Pool storage self,
+        uint256 positionId,
+        NonFungibleAssetId nonFungibleAssetId
+    ) external {
         Position storage position = self.positions[positionId];
         address nftAddress = nonFungibleAssetId.nft();
         uint256 tokenId = nonFungibleAssetId.tokenId();

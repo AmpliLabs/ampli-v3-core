@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0;
 
-import {PositionId} from "../types/PositionId.sol";
 import {NonFungibleAssetId} from "../types/NonFungibleAssetId.sol";
 
 interface IAmpli {
@@ -13,10 +12,10 @@ interface IAmpli {
     event SetNonFungibleCollateral(address indexed asset, uint256 lltv);
 
     event SupplyFungibleCollateral(
-        PositionId indexed id, address indexed caller, address indexed asset, uint256 amount
+        uint256 indexed id, address indexed caller, address indexed asset, uint256 amount
     );
     event SuppluNonFungibleCollateral(
-        PositionId indexed id, address indexed caller, address indexed asset, uint256 tokenId
+        uint256 indexed id, address indexed caller, address indexed asset, uint256 tokenId
     );
 
     function setOwner(address newOwner) external;
