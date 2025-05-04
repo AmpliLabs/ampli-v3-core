@@ -1,1 +1,2 @@
 forge-std-1.9.7/=dependencies/forge-std-1.9.7/
+v4-core/=dependencies/uniswap-v4-core-4/src/

@@ -11,9 +11,7 @@ interface IAmpli {
     event SetFungibleCollateral(uint256 indexed id, address indexed asset, uint256 lltv);
     event SetNonFungibleCollateral(address indexed asset, uint256 lltv);
 
-    event SupplyFungibleCollateral(
-        uint256 indexed id, address indexed caller, address indexed asset, uint256 amount
-    );
+    event SupplyFungibleCollateral(uint256 indexed id, address indexed caller, address indexed asset, uint256 amount);
     event SuppluNonFungibleCollateral(
         uint256 indexed id, address indexed caller, address indexed asset, uint256 tokenId
     );

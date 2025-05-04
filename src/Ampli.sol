@@ -2,9 +2,5 @@
 pragma solidity 0.8.29;
 
 import {IAmpli} from "./interfaces/IAmpli.sol";
-import {NonFungibleAssetId} from "./types/NonFungibleAssetId.sol";
-import {Position} from "./types/Position.sol";
 
-contract Ampli {
-
-}
+contract Ampli {}

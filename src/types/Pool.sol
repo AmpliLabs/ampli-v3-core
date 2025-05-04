@@ -8,9 +8,12 @@ import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {SafeTransferLibrary} from "../libraries/SafeTransfer.sol";
 
 struct Pool {
-    uint8 reservesCount;
     address owner;
     address petToken;
+    uint8 reservesCount;
+    uint64 lastUpdate;
+    uint256 totalBorrowAssets;
+    uint256 totalBorrowShares;
     mapping(uint256 fungibleAssetId => FungibleAssetParams) fungibleAssetParams;
     mapping(address nft => bool isCollateral) isNFTCollateral;
     mapping(address nft => uint256 lltv) nonFungibleAssetParams;
@@ -64,11 +67,9 @@ library PoolLibrary {
         // TODO: checkout position
     }
 
-    function supplyNonFungibleCollateral(
-        Pool storage self,
-        uint256 positionId,
-        NonFungibleAssetId nonFungibleAssetId
-    ) external {
+    function supplyNonFungibleCollateral(Pool storage self, uint256 positionId, NonFungibleAssetId nonFungibleAssetId)
+        external
+    {
         Position storage position = self.positions[positionId];
         address nftAddress = nonFungibleAssetId.nft();
         uint256 tokenId = nonFungibleAssetId.tokenId();
@@ -82,5 +83,14 @@ library PoolLibrary {
         nftAddress.safeTransferFrom(msg.sender, address(this), tokenId);
 
         // TODO: checkout position
+    }
+
+    function accrueInterest(Pool storage self) internal {
+        uint256 elapsed = block.timestamp - self.lastUpdate;
+        if (elapsed == 0) return;
+
+        // TODO: Borrow Rate \ Mint and Donate \ Fee
+
+        self.lastUpdate = uint64(block.timestamp);
     }
 }
