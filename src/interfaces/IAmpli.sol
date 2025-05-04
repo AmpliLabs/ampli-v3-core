@@ -7,8 +7,6 @@ import {NonFungibleAssetId} from "../types/NonFungibleAssetId.sol";
 interface IAmpli {
     error InvaildOwner();
     error NotOwner();
-    error InvaildFungibleAsset();
-    error InvaildNonFungibleAsset();
 
     event SetOwner(address indexed newOwner);
     event SetFungibleCollateral(uint256 indexed id, address indexed asset, uint256 lltv);

@@ -7,6 +7,7 @@ import {NonFungibleAssetSet} from "./NonFungibleAssetsSet.sol";
 import {NonFungibleAssetId} from "./NonFungibleAssetId.sol";
 import {Math} from "../libraries/Math.sol";
 import {ShareMath} from "../libraries/ShareMath.sol";
+import {FungibleAssetParams} from "./FungibleAssetParams.sol";
 
 struct Position {
     uint128 borrowShares;
@@ -57,7 +58,7 @@ library PositionLibrary {
 
     function isHealthy(
         Position storage self,
-        mapping(uint256 => uint256 lltv) storage fungibleAssetLltv,
+        mapping(uint256 => FungibleAssetParams) storage fungibleAssetParams,
         mapping(address => uint256 lltv) storage nonFungibleAssetLltv,
         IOracle oracle,
         uint256 reserveCount,
@@ -76,8 +77,9 @@ library PositionLibrary {
                 uint256 collateral = self.collateralFungibleAssets[i];
                 uint256 collateralPrice = oracle.fungibleAssetPrice(i);
 
-                maxBorrow +=
-                    collateral.mulDivDown(collateralPrice, ORACLE_PRICE_SCALE).mulPercentDown(fungibleAssetLltv[i]);
+                maxBorrow += collateral.mulDivDown(collateralPrice, ORACLE_PRICE_SCALE).mulPercentDown(
+                    fungibleAssetParams[i].lltv
+                );
             }
         }
 
