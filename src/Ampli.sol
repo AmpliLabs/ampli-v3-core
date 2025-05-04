@@ -15,10 +15,11 @@ contract Ampli is IAmpli {
     uint8 internal _reservesCount;
 
     mapping(uint256 => address) internal _reservesList;
-    mapping(uint256 => AssetParams) internal _assetParams;
     mapping(PositionId => Position) internal _positions;
 
     mapping(address nft => bool isCollateral) public isNFTCollateral;
+    mapping(uint256 fungibleAssetId => uint256 lltv) public fungibleAssetParams;
+    mapping(address nonFungibleAsset => uint256 lltv) public nonFungibleAssetParams;
 
     constructor(address newOwner) {
         require(newOwner != address(0), InvaildOwner());
@@ -39,17 +40,20 @@ contract Ampli is IAmpli {
         emit SetOwner(newOwner);
     }
 
-    function enableFungibleCollateral(address reserve, AssetParams calldata asset) external onlyOwner {
-        _reservesList[_reservesCount] = reserve;
-        _assetParams[_reservesCount] = asset;
+    function enableFungibleCollateral(address reserve, uint256 lltv) external onlyOwner {
+        fungibleAssetParams[_reservesCount] = lltv;
 
+        _reservesList[_reservesCount] = reserve;
         _reservesCount += 1;
 
-        emit SetAssetParams(_reservesCount, reserve, asset.oracle, asset.lltv);
+        emit SetFungibleCollateral(_reservesCount, reserve, lltv);
     }
 
-    function enableNonFungibleCollateral(address reserve) external onlyOwner {
+    function enableNonFungibleCollateral(address reserve, uint256 lltv) external onlyOwner {
+        nonFungibleAssetParams[reserve] = lltv;
         isNFTCollateral[reserve] = true;
+
+        emit SetNonFungibleCollateral(reserve, lltv);
     }
 
     /* SUPPLY MANAGEMENT */
@@ -59,11 +63,15 @@ contract Ampli is IAmpli {
         Position storage position = _positions[positionId];
         address fungibleAddress = _reservesList[fungibleAssetId];
 
+        // TODO: accrue interest
+
         position.addFungible(fungibleAssetId, amount);
 
         emit SupplyFungibleCollateral(positionId, msg.sender, fungibleAddress, amount);
 
         fungibleAddress.safeTransferFrom(msg.sender, address(this), amount);
+
+        // TODO: checkout position
     }
 
     function supplyNonFungibleCollateral(PositionId positionId, NonFungibleAssetId nonFungibleAssetId) external {
@@ -73,10 +81,14 @@ contract Ampli is IAmpli {
 
         require(isNFTCollateral[nftAddress], InvaildNonFungibleAsset());
 
+        // TODO: accrue interest
+
         position.addNonFungible(nonFungibleAssetId);
 
         emit SuppluNonFungibleCollateral(positionId, msg.sender, nftAddress, tokenId);
 
         nftAddress.safeTransferFrom(msg.sender, address(this), tokenId);
+
+        // TODO: checkout position
     }
 }

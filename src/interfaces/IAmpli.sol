@@ -11,7 +11,9 @@ interface IAmpli {
     error InvaildNonFungibleAsset();
 
     event SetOwner(address indexed newOwner);
-    event SetAssetParams(uint256 indexed id, address indexed asset, address oracle, uint96 lltv);
+    event SetFungibleCollateral(uint256 indexed id, address indexed asset, uint256 lltv);
+    event SetNonFungibleCollateral(address indexed asset, uint256 lltv);
+
     event SupplyFungibleCollateral(
         PositionId indexed id, address indexed caller, address indexed asset, uint256 amount
     );
@@ -19,14 +21,9 @@ interface IAmpli {
         PositionId indexed id, address indexed caller, address indexed asset, uint256 tokenId
     );
 
-    struct AssetParams {
-        address oracle;
-        uint96 lltv;
-    }
-
     function setOwner(address newOwner) external;
 
-    function enableFungibleCollateral(address asset, AssetParams calldata params) external;
+    function enableFungibleCollateral(address asset, uint256 lltv) external;
 
-    function enableNonFungibleCollateral(address asset) external;
+    function enableNonFungibleCollateral(address asset, uint256 lltv) external;
 }
