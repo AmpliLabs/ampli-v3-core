@@ -60,6 +60,14 @@ library PositionLibrary {
         self.borrowShares = self.borrowShares + share;
     }
 
+    function repay(Position storage self, BorrowShare share) internal {
+        self.borrowShares = self.borrowShares - share;
+    }
+
+    function liquidate(Position storage self, address liquidator) internal {
+        self.owner = liquidator;
+    }
+
     function isHealthy(
         Position storage self,
         mapping(uint256 => FungibleAssetParams) storage fungibleAssetParams,
