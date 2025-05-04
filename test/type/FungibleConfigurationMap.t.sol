@@ -8,10 +8,14 @@ contract FungibleConfigurationMapTest is Test {
     FungibleConfigurationMap public self;
 
     function test_fuzz_fungibleConfigurationMap_pack_unpack(uint8 _index) public {
+        assertTrue(self.isZero());
+
         self.setAssetAsCollateral(_index, true);
         assertTrue(self.isUsingAsCollateral(_index));
+        assertFalse(self.isZero());
 
         self.setAssetAsCollateral(_index, false);
         assertFalse(self.isUsingAsCollateral(_index));
+        assertTrue(self.isZero());
     }
 }

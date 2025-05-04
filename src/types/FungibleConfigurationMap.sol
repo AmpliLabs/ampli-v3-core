@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.29;
 
 struct FungibleConfigurationMap {
@@ -34,5 +34,9 @@ library FungibleConfigurationMapLibrary {
             uint256 bit = 1 << fungibleAssetId;
             return (self.data & bit) != 0;
         }
+    }
+
+    function isZero(FungibleConfigurationMap storage self) internal view returns (bool) {
+        return self.data == 0;
     }
 }
