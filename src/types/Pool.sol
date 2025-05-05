@@ -3,6 +3,7 @@ pragma solidity 0.8.29;
 
 import {IIrm} from "../interfaces/IIrm.sol";
 import {Position} from "./Position.sol";
+import {BorrowShare} from "./BorrowShare.sol";
 import {FungibleAssetParams} from "./FungibleAssetParams.sol";
 import {NonFungibleAssetId} from "./NonFungibleAssetId.sol";
 import {SafeTransferLibrary} from "../libraries/SafeTransfer.sol";
@@ -11,7 +12,7 @@ import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 
 struct Pool {
-    address pedToken;
+    address pegToken;
     IIrm irm;
     address owner;
     uint8 reservesCount;
@@ -97,6 +98,22 @@ library PoolLibrary {
         nftAddress.safeTransferFrom(msg.sender, address(this), tokenId);
     }
 
+    /* BORROW MANAGEMENT */
+
+    function borrow(Pool storage self, uint256 positionId, BorrowShare share) external {
+        Position storage position = self.positions[positionId];
+        position.borrow(share);
+
+        // TODO: Mint peg token
+    }
+
+    function repay(Pool storage self, uint256 positionId, BorrowShare share) external {
+        Position storage position = self.positions[positionId];
+        position.repay(share);
+
+        // TODO: Burn peg token
+    }
+
     /* WITHDRAW MANAGEMENT */
 
     function withdrawFungibleCollateral(Pool storage self, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
@@ -123,7 +140,7 @@ library PoolLibrary {
 
         accrueInterest(self);
 
-        position.removeNonFungible(nonFungibleAssetId); 
+        position.removeNonFungible(nonFungibleAssetId);
         nftAddress.safeTransfer(msg.sender, tokenId);
     }
 
@@ -135,16 +152,17 @@ library PoolLibrary {
 
         self.totalBorrowAssets += interest;
 
-        int128 allFee = (interest * self.feeRatio / 100).toInt128();
-        int128 ownerFee = (allFee * self.ownerFeeRatio / 100).toInt128();
-        int128 riskReverse = allFee - ownerFee;
+        uint256 allFee = interest * self.feeRatio / 100;
+        uint256 ownerFee = allFee * self.ownerFeeRatio / 100;
+        uint256 riskReverse = allFee - ownerFee;
 
-        self.ownerFee += ownerFee;
-        self.riskReverseFee += riskReverse;
+        self.ownerFee += ownerFee.toInt128();
+        self.riskReverseFee += riskReverse.toInt128();
 
-        IPoolManager(UNISWAP_V4).donate(self.poolKey, 0, interest - uint256(int128(allFee)), "");
+        IPoolManager(UNISWAP_V4).donate(self.poolKey, 0, interest - allFee, "");
 
-        // TODO: mint and settle
+        // TODO: mint peg token and settle token
+
         self.lastUpdate = uint64(block.timestamp);
     }
 }
