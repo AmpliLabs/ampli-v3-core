@@ -79,8 +79,6 @@ library PoolLibrary {
         position.addFungible(fungibleAssetId, amount);
 
         fungibleAddress.safeTransferFrom(msg.sender, address(this), amount);
-
-        // TODO: checkout position
     }
 
     function supplyNonFungibleCollateral(Pool storage self, uint256 positionId, NonFungibleAssetId nonFungibleAssetId)
@@ -97,8 +95,36 @@ library PoolLibrary {
         position.addNonFungible(nonFungibleAssetId);
 
         nftAddress.safeTransferFrom(msg.sender, address(this), tokenId);
+    }
 
-        // TODO: checkout position
+    /* WITHDRAW MANAGEMENT */
+
+    function withdrawFungibleCollateral(Pool storage self, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
+        internal
+    {
+        address fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
+        require(fungibleAddress != address(0), InvaildFungibleAsset());
+
+        Position storage position = self.positions[positionId];
+
+        accrueInterest(self);
+
+        position.removeFungible(fungibleAssetId, amount);
+
+        fungibleAddress.safeTransfer(msg.sender, amount);
+    }
+
+    function withdrawNonFungibleCollateral(Pool storage self, uint256 positionId, NonFungibleAssetId nonFungibleAssetId)
+        internal
+    {
+        Position storage position = self.positions[positionId];
+        address nftAddress = nonFungibleAssetId.nft();
+        uint256 tokenId = nonFungibleAssetId.tokenId();
+
+        accrueInterest(self);
+
+        position.removeNonFungible(nonFungibleAssetId); 
+        nftAddress.safeTransfer(msg.sender, tokenId);
     }
 
     function accrueInterest(Pool storage self) internal {
