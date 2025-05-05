@@ -2,6 +2,7 @@
 pragma solidity 0.8.29;
 
 import {IIrm} from "../interfaces/IIrm.sol";
+import {IPegToken} from "../interfaces/IPegToken.sol";
 import {Position} from "./Position.sol";
 import {BorrowShare} from "./BorrowShare.sol";
 import {FungibleAssetParams} from "./FungibleAssetParams.sol";
@@ -184,6 +185,7 @@ library PoolLibrary {
 
         self.totalBorrowAssets += interest;
 
+        // TODO: Protocol fee
         uint256 allFee = interest * self.feeRatio / 100;
         uint256 ownerFee = allFee * self.ownerFeeRatio / 100;
         uint256 riskReverse = allFee - ownerFee;
@@ -191,9 +193,12 @@ library PoolLibrary {
         self.ownerFee += ownerFee.toInt128();
         self.riskReverseFee += riskReverse.toInt128();
 
-        IPoolManager(UNISWAP_V4).donate(self.poolKey, 0, interest - allFee, "");
-
-        // TODO: mint peg token and settle token
+        uint256 donateBalance = interest - allFee;
+        
+        IPoolManager(UNISWAP_V4).donate(self.poolKey, 0, donateBalance, "");
+        IPoolManager(UNISWAP_V4).sync(Currency.wrap(self.pegToken));
+        IPegToken(self.pegToken).mint(UNISWAP_V4, donateBalance);
+        IPoolManager(UNISWAP_V4).settle();
 
         self.lastUpdate = uint64(block.timestamp);
     }

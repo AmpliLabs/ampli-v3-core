@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
+import {IPegToken} from "../interfaces/IPegToken.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
 
 /// @notice Standard fungible token (https://eips.ethereum.org/EIPS/eip-20).
-contract PegToken is IERC20 {
+contract PegToken is IPegToken {
     error InvaildManager();
 
     string public name;
