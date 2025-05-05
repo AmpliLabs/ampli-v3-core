@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.29;
 
-uint256 constant PERCENTAGE_PRECISION = 1e6; // 1% percentage
-
 library Math {
+    uint256 constant PERCENTAGE_PRECISION = 1e6; // 1% percentage
+
     /// @dev Returns (`x` * `y`) / `d` rounded down.
     function mulDivDown(uint256 x, uint256 y, uint256 d) internal pure returns (uint256) {
         return (x * y) / d;
