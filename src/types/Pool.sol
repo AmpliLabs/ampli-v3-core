@@ -8,8 +8,11 @@ import {FungibleAssetParams} from "./FungibleAssetParams.sol";
 import {NonFungibleAssetId} from "./NonFungibleAssetId.sol";
 import {SafeTransferLibrary} from "../libraries/SafeTransfer.sol";
 import {SafeCast} from "../libraries/SafeCast.sol";
+import {PegToken} from "../tokenization/PegToken.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
+import {Currency} from "v4-core/types/Currency.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
+import {IHooks} from "v4-core/interfaces/IHooks.sol";
 
 struct Pool {
     address pegToken;
@@ -38,15 +41,44 @@ library PoolLibrary {
 
     error InvaildFungibleAsset();
     error InvaildNonFungibleAsset();
-    error InvaildOwnerFeeReserve();
+    error InvaildFeeRatio();
+    error InvaildPegTokenSalt();
 
     address constant UNISWAP_V4 = 0x000000000004444c5dc75cB358380D2e3dE08A90;
-
-    function initialize(Pool storage self, address owner, bytes32 salt, uint8 ownerFeeRatio) internal {
+    uint160 constant INIT_PRICE = 0x1000000000000000000000000;
+    function initialize(
+        Pool storage self,
+        address owner,
+        address underlying,
+        IIrm irm,
+        uint8 feeRatio,
+        uint8 ownerFeeRatio,
+        bytes32 salt
+    ) internal {
         // TODO: create2 pet token and set hook as owner
-        // Depoly Token as token 1
+        // Depoly pegToken as token 0
+        require(ownerFeeRatio < 100, InvaildFeeRatio());
+        require(feeRatio < 100, InvaildFeeRatio());
 
-        require(ownerFeeRatio < 100, InvaildOwnerFeeReserve());
+        address pegToken = address(new PegToken{salt: salt}(underlying, address(this)));
+        require(underlying < pegToken, InvaildPegTokenSalt());
+
+        PoolKey memory poolKey = PoolKey({
+            currency0: Currency.wrap(pegToken),
+            currency1: Currency.wrap(underlying),
+            fee: 100, // 0.01%
+            tickSpacing: 1,
+            hooks: IHooks(address(this))
+        });
+
+        IPoolManager(UNISWAP_V4).initialize(poolKey, INIT_PRICE);
+
+        self.pegToken = pegToken;
+        self.irm = irm;
+        self.owner = owner;
+        self.feeRatio = feeRatio;
+        self.ownerFeeRatio = ownerFeeRatio;
+        self.poolKey = poolKey;
     }
 
     function setOwner(Pool storage self, address newOwner) external {
