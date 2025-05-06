@@ -26,7 +26,7 @@ struct Pool {
     int128 ownerFee;
     int128 riskReverseFee;
     uint256 totalBorrowAssets;
-    uint256 totalBorrowShares;
+    BorrowShare totalBorrowShares;
     PoolKey poolKey;
     mapping(uint256 fungibleAssetId => FungibleAssetParams) fungibleAssetParams;
     mapping(address nft => bool isCollateral) isNFTCollateral;
@@ -47,6 +47,7 @@ library PoolLibrary {
 
     address constant UNISWAP_V4 = 0x000000000004444c5dc75cB358380D2e3dE08A90;
     uint160 constant INIT_PRICE = 0x1000000000000000000000000;
+
     function initialize(
         Pool storage self,
         address owner,
@@ -133,18 +134,20 @@ library PoolLibrary {
 
     /* BORROW MANAGEMENT */
 
-    function borrow(Pool storage self, uint256 positionId, BorrowShare share) external {
+    function borrow(Pool storage self, address receiver, uint256 positionId, BorrowShare share) external {
         Position storage position = self.positions[positionId];
         position.borrow(share);
 
-        // TODO: Mint peg token
+        uint256 borrowAsset = share.toAssetsDown(self.totalBorrowAssets, self.totalBorrowShares);
+        IPegToken(self.pegToken).mint(receiver, borrowAsset);
     }
 
     function repay(Pool storage self, uint256 positionId, BorrowShare share) external {
         Position storage position = self.positions[positionId];
         position.repay(share);
 
-        // TODO: Burn peg token
+        uint256 repayAsset = share.toAssetsUp(self.totalBorrowAssets, self.totalBorrowShares);
+        IPegToken(self.pegToken).burn(msg.sender, repayAsset);
     }
 
     /* WITHDRAW MANAGEMENT */
@@ -177,6 +180,12 @@ library PoolLibrary {
         nftAddress.safeTransfer(msg.sender, tokenId);
     }
 
+    /* LIQUIDATION */
+
+    function liquidate(Pool storage self, uint256 positionId) external {}
+
+    /* INTEREST MANAGEMENT */
+
     function accrueInterest(Pool storage self) internal {
         uint256 elapsed = block.timestamp - self.lastUpdate;
         if (elapsed == 0) return;
@@ -194,7 +203,7 @@ library PoolLibrary {
         self.riskReverseFee += riskReverse.toInt128();
 
         uint256 donateBalance = interest - allFee;
-        
+
         IPoolManager(UNISWAP_V4).donate(self.poolKey, 0, donateBalance, "");
         IPoolManager(UNISWAP_V4).sync(Currency.wrap(self.pegToken));
         IPegToken(self.pegToken).mint(UNISWAP_V4, donateBalance);

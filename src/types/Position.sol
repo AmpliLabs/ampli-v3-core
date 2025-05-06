@@ -76,9 +76,9 @@ library PositionLibrary {
         uint256 reserveCount,
         uint256 totalBorrowAsset,
         BorrowShare totalBorrowShare
-    ) internal view returns (bool) {
+    ) internal view returns (bool, uint256, uint256) {
         if (self.funibles.isZero() && (self.nonFungibleAssets.length() > 0)) {
-            return false;
+            return (false, 0, 0);
         }
 
         uint256 borrowed = self.borrowShares.toAssetsUp(totalBorrowAsset, totalBorrowShare);
@@ -96,7 +96,7 @@ library PositionLibrary {
         }
 
         if (maxBorrow >= borrowed) {
-            return true;
+            return (true, maxBorrow, borrowed);
         } else {
             for (uint256 i = 0; i < self.nonFungibleAssets.length(); i++) {
                 NonFungibleAssetId collateral = self.nonFungibleAssets.at(i);
@@ -106,7 +106,7 @@ library PositionLibrary {
                 maxBorrow += collateralPrice.mulPercentDown(nonFungibleAssetLltv[collateral.nft()]);
             }
 
-            return maxBorrow >= borrowed;
+            return (maxBorrow >= borrowed, maxBorrow, borrowed);
         }
     }
 }
