@@ -89,6 +89,11 @@ library PoolLibrary {
         self.feeRatio = feeRatio;
         self.ownerFeeRatio = ownerFeeRatio;
         self.poolKey = poolKey;
+
+        self.fungibleAssetParams[0] = FungibleAssetParams({asset: underlying, lltv: 1e6});
+        self.fungibleAssetParams[1] = FungibleAssetParams({asset: pegToken, lltv: 1e6});
+
+        self.reservesCount = 2;
     }
 
     function setOwner(Pool storage self, address newOwner) external {
@@ -207,21 +212,21 @@ library PoolLibrary {
 
         require(!health, PositionIsHealthy());
 
-        uint256 liquidationIncentiveFactor = Math.mulDivDown(borrowed, 1e18, maxBorrow);
+        // uint256 liquidationIncentiveFactor = Math.mulDivDown(borrowed, 1e18, maxBorrow);
 
-        uint256 repaidAsset;
+        uint256 repaidAsset = borrowed;
 
-        if (liquidationIncentiveFactor >= MIN_LIQUIDATION_INCENTIVE_FACTOR) {
-            repaidAsset = borrowed;
-        } else {
-            repaidAsset = Math.mulDivDown(maxBorrow, MIN_LIQUIDATION_INCENTIVE_FACTOR, 1e18);
+        // if (liquidationIncentiveFactor >= MIN_LIQUIDATION_INCENTIVE_FACTOR) {
+        //     repaidAsset = borrowed;
+        // } else {
+        //     repaidAsset = Math.mulDivDown(maxBorrow, MIN_LIQUIDATION_INCENTIVE_FACTOR, 1e18);
 
-            int256 bedDebtAsset = int256(borrowed) - int256(repaidAsset);
+        //     int256 bedDebtAsset = int256(borrowed) - int256(repaidAsset);
 
-            if (bedDebtAsset < 0) {
-                self.riskReverseFee += bedDebtAsset.toInt128();
-            }
-        }
+        //     if (bedDebtAsset < 0) {
+        //         self.riskReverseFee += bedDebtAsset.toInt128();
+        //     }
+        // }
 
         IPegToken(self.pegToken).burn(msg.sender, repaidAsset);
 
