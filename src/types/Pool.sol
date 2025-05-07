@@ -3,11 +3,13 @@ pragma solidity 0.8.29;
 
 import {IIrm} from "../interfaces/IIrm.sol";
 import {IPegToken} from "../interfaces/IPegToken.sol";
+import {IOracle} from "../interfaces/IOracle.sol";
 import {Position} from "./Position.sol";
 import {BorrowShare} from "./BorrowShare.sol";
 import {FungibleAssetParams} from "./FungibleAssetParams.sol";
 import {NonFungibleAssetId} from "./NonFungibleAssetId.sol";
 import {SafeTransferLibrary} from "../libraries/SafeTransfer.sol";
+import {Math} from "../libraries/Math.sol";
 import {SafeCast} from "../libraries/SafeCast.sol";
 import {PegToken} from "../tokenization/PegToken.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
@@ -18,6 +20,7 @@ import {IHooks} from "v4-core/interfaces/IHooks.sol";
 struct Pool {
     address pegToken;
     IIrm irm;
+    IOracle oracle;
     address owner;
     uint8 reservesCount;
     uint8 feeRatio;
@@ -39,12 +42,15 @@ using PoolLibrary for Pool global;
 library PoolLibrary {
     using SafeTransferLibrary for address;
     using SafeCast for uint256;
+    using SafeCast for int256;
 
     error InvaildFungibleAsset();
     error InvaildNonFungibleAsset();
     error InvaildFeeRatio();
     error InvaildPegTokenSalt();
+    error PositionIsHealthy();
 
+    uint256 constant MIN_LIQUIDATION_INCENTIVE_FACTOR = 0.95e18;
     address constant UNISWAP_V4 = 0x000000000004444c5dc75cB358380D2e3dE08A90;
     uint160 constant INIT_PRICE = 0x1000000000000000000000000;
 
@@ -53,6 +59,7 @@ library PoolLibrary {
         address owner,
         address underlying,
         IIrm irm,
+        IOracle oracle,
         uint8 feeRatio,
         uint8 ownerFeeRatio,
         bytes32 salt
@@ -77,6 +84,7 @@ library PoolLibrary {
 
         self.pegToken = pegToken;
         self.irm = irm;
+        self.oracle = oracle;
         self.owner = owner;
         self.feeRatio = feeRatio;
         self.ownerFeeRatio = ownerFeeRatio;
@@ -105,7 +113,7 @@ library PoolLibrary {
         external
     {
         address fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
-        require(fungibleAddress != address(0), InvaildFungibleAsset());
+        require(self.fungibleAssetParams[fungibleAssetId].lltv != 0, InvaildFungibleAsset());
 
         Position storage position = self.positions[positionId];
 
@@ -182,7 +190,44 @@ library PoolLibrary {
 
     /* LIQUIDATION */
 
-    function liquidate(Pool storage self, uint256 positionId) external {}
+    function liquidate(Pool storage self, uint256 positionId) external {
+        Position storage position = self.positions[positionId];
+
+        accrueInterest(self);
+
+        // maxBorrow = collateral value, borrowed = borrow peg token value
+        (bool health, uint256 maxBorrow, uint256 borrowed) = position.isHealthy(
+            self.fungibleAssetParams,
+            self.nonFungibleAssetParams,
+            self.oracle,
+            self.reservesCount,
+            self.totalBorrowAssets,
+            self.totalBorrowShares
+        );
+
+        require(!health, PositionIsHealthy());
+
+        uint256 liquidationIncentiveFactor = Math.mulDivDown(borrowed, 1e18, maxBorrow);
+
+        uint256 repaidAsset;
+
+        if (liquidationIncentiveFactor >= MIN_LIQUIDATION_INCENTIVE_FACTOR) {
+            repaidAsset = borrowed;
+        } else {
+            repaidAsset = Math.mulDivDown(maxBorrow, MIN_LIQUIDATION_INCENTIVE_FACTOR, 1e18);
+
+            int256 bedDebtAsset = int256(borrowed) - int256(repaidAsset);
+
+            if (bedDebtAsset < 0) {
+                self.riskReverseFee += bedDebtAsset.toInt128();
+            }
+        }
+
+        IPegToken(self.pegToken).burn(msg.sender, repaidAsset);
+
+        position.owner = msg.sender;
+        position.borrowShares = BorrowShare.wrap(0);
+    }
 
     /* INTEREST MANAGEMENT */
 
