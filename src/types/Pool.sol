@@ -50,7 +50,7 @@ library PoolLibrary {
     error InvaildPegTokenSalt();
     error PositionIsHealthy();
 
-    uint256 constant MIN_LIQUIDATION_INCENTIVE_FACTOR = 0.95e18;
+    uint256 constant MIN_LIQUIDATION_INCENTIVE_FACTOR = 0.99e18;
     address constant UNISWAP_V4 = 0x000000000004444c5dc75cB358380D2e3dE08A90;
     uint160 constant INIT_PRICE = 0x1000000000000000000000000;
 
@@ -91,7 +91,7 @@ library PoolLibrary {
         self.poolKey = poolKey;
 
         self.fungibleAssetParams[0] = FungibleAssetParams({asset: underlying, lltv: 1e6});
-        self.fungibleAssetParams[1] = FungibleAssetParams({asset: pegToken, lltv: 1e6});
+        self.fungibleAssetParams[1] = FungibleAssetParams({asset: pegToken, lltv: 0.99e6});
 
         self.reservesCount = 2;
     }
@@ -212,23 +212,27 @@ library PoolLibrary {
 
         require(!health, PositionIsHealthy());
 
-        // uint256 liquidationIncentiveFactor = Math.mulDivDown(borrowed, 1e18, maxBorrow);
+        (uint256 maxBorrowedAdjust, uint256 borrowedAdjust) = position.adjust(maxBorrow, borrowed);
 
-        uint256 repaidAsset = borrowed;
+        if (borrowedAdjust != 0) {
+            uint256 liquidationIncentiveFactor = Math.mulDivDown(borrowedAdjust, 1e18, maxBorrowedAdjust);
 
-        // if (liquidationIncentiveFactor >= MIN_LIQUIDATION_INCENTIVE_FACTOR) {
-        //     repaidAsset = borrowed;
-        // } else {
-        //     repaidAsset = Math.mulDivDown(maxBorrow, MIN_LIQUIDATION_INCENTIVE_FACTOR, 1e18);
+            uint256 repaidAsset;
 
-        //     int256 bedDebtAsset = int256(borrowed) - int256(repaidAsset);
+            if (liquidationIncentiveFactor >= MIN_LIQUIDATION_INCENTIVE_FACTOR) {
+                repaidAsset = borrowed;
+            } else {
+                repaidAsset = Math.mulDivDown(maxBorrow, MIN_LIQUIDATION_INCENTIVE_FACTOR, 1e18);
 
-        //     if (bedDebtAsset < 0) {
-        //         self.riskReverseFee += bedDebtAsset.toInt128();
-        //     }
-        // }
+                int256 bedDebtAsset = int256(borrowed) - int256(repaidAsset);
 
-        IPegToken(self.pegToken).burn(msg.sender, repaidAsset);
+                if (bedDebtAsset < 0) {
+                    self.riskReverseFee += bedDebtAsset.toInt128();
+                }
+            }
+
+            IPegToken(self.pegToken).burn(msg.sender, repaidAsset);
+        }
 
         position.owner = msg.sender;
         position.borrowShares = BorrowShare.wrap(0);
@@ -249,8 +253,12 @@ library PoolLibrary {
         uint256 ownerFee = allFee * self.ownerFeeRatio / 100;
         uint256 riskReverse = allFee - ownerFee;
 
-        self.ownerFee += ownerFee.toInt128();
-        self.riskReverseFee += riskReverse.toInt128();
+        if (self.riskReverseFee >= 0) {
+            self.ownerFee += ownerFee.toInt128();
+            self.riskReverseFee += riskReverse.toInt128();
+        } else {
+            self.riskReverseFee += allFee.toInt128();
+        }
 
         uint256 donateBalance = interest - allFee;
 
