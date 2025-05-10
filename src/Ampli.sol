@@ -6,6 +6,7 @@ import {IIrm} from "./interfaces/IIrm.sol";
 import {IOracle} from "./interfaces/IOracle.sol";
 import {PegToken} from "./tokenization/PegToken.sol";
 import {Pool} from "./types/Pool.sol";
+import {NonFungibleAssetId} from "./types/NonFungibleAssetId.sol";
 import {PoolId} from "v4-core/types/PoolId.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency} from "v4-core/types/Currency.sol";
@@ -44,5 +45,39 @@ contract Ampli is IAmpli {
         emit Initialize(id, key.currency0, key.currency1, irm, oracle);
         emit SetOwner(id, owner);
         emit SetFee(id, feeRatio, ownerFeeRatio);
+    }
+
+    function supplyFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
+        external
+    {
+        PoolId id = key.toId();
+        address fungibleAddress = _pools[id].supplyFungibleCollateral(key, positionId, fungibleAssetId, amount);
+        emit SupplyFungibleCollateral(id, positionId, fungibleAddress, amount);
+    }
+
+    function withdrawFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
+        external
+    {
+        PoolId id = key.toId();
+        address fungibleAddress = _pools[id].withdrawFungibleCollateral(key, positionId, fungibleAssetId, amount);
+        emit WithdrawFungibleCollateral(id, positionId, fungibleAddress, amount);
+    }
+
+    function supplyNonFungibleCollateral(PoolKey memory key, uint256 positionId, NonFungibleAssetId nonFungibleAssetId)
+        external
+    {
+        PoolId id = key.toId();
+        _pools[id].supplyNonFungibleCollateral(key, positionId, nonFungibleAssetId);
+        emit SuppluNonFungibleCollateral(id, positionId, nonFungibleAssetId.nft(), nonFungibleAssetId.tokenId());
+    }
+
+    function withdrawNonFungibleCollateral(
+        PoolKey memory key,
+        uint256 positionId,
+        NonFungibleAssetId nonFungibleAssetId
+    ) external {
+        PoolId id = key.toId();
+        _pools[id].withdrawNonFungibleCollateral(key, positionId, nonFungibleAssetId);
+        emit WithdrawNonFungibleCollateral(id, positionId, nonFungibleAssetId.nft(), nonFungibleAssetId.tokenId());
     }
 }

@@ -16,14 +16,20 @@ interface IAmpli {
     event Initialize(
         PoolId indexed id, Currency indexed pegToken, Currency indexed underlying, IIrm irm, IOracle oracle
     );
+    event SupplyFungibleCollateral(
+        PoolId indexed id, uint256 indexed positionId, address indexed asset, uint256 amount
+    );
+    event SuppluNonFungibleCollateral(
+        PoolId indexed id, uint256 indexed positionId, address indexed asset, uint256 tokenId
+    );
+    event WithdrawFungibleCollateral(
+        PoolId indexed id, uint256 indexed positionId, address indexed asset, uint256 amount
+    );
+    event WithdrawNonFungibleCollateral(
+        PoolId indexed id, uint256 indexed positionId, address indexed asset, uint256 tokenId
+    );
     event SetOwner(PoolId indexed id, address indexed newOwner);
     event SetFee(PoolId indexed id, uint8 feeRatio, uint8 ownerFeeRatio);
-
     event SetFungibleCollateral(uint256 indexed id, address indexed asset, uint256 lltv);
     event SetNonFungibleCollateral(address indexed asset, uint256 lltv);
-
-    event SupplyFungibleCollateral(uint256 indexed id, address indexed caller, address indexed asset, uint256 amount);
-    event SuppluNonFungibleCollateral(
-        uint256 indexed id, address indexed caller, address indexed asset, uint256 tokenId
-    );
 }

@@ -99,8 +99,8 @@ library PoolLibrary {
         uint256 positionId,
         uint256 fungibleAssetId,
         uint256 amount
-    ) external {
-        address fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
+    ) external returns (address fungibleAddress) {
+        fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
         require(self.fungibleAssetParams[fungibleAssetId].lltv != 0, InvaildFungibleAsset());
 
         Position storage position = self.positions[positionId];
@@ -157,8 +157,8 @@ library PoolLibrary {
         uint256 positionId,
         uint256 fungibleAssetId,
         uint256 amount
-    ) internal {
-        address fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
+    ) internal returns (address fungibleAddress) {
+        fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
         require(fungibleAddress != address(0), InvaildFungibleAsset());
 
         Position storage position = self.positions[positionId];
