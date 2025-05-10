@@ -17,7 +17,6 @@ import {Currency} from "v4-core/types/Currency.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 
 struct Pool {
-    address pegToken;
     IIrm irm;
     IOracle oracle;
     address owner;
@@ -62,7 +61,6 @@ library PoolLibrary {
     ) internal {
         IPoolManager(UNISWAP_V4).initialize(poolKey, INIT_PRICE);
 
-        self.pegToken = Currency.unwrap(poolKey.currency0);
         self.irm = irm;
         self.oracle = oracle;
         self.owner = owner;
@@ -230,7 +228,7 @@ library PoolLibrary {
                 }
             }
 
-            IPegToken(self.pegToken).burn(msg.sender, repaidAsset);
+            IPegToken(Currency.unwrap(poolKey.currency0)).burn(msg.sender, repaidAsset);
         }
 
         position.owner = msg.sender;
@@ -262,8 +260,8 @@ library PoolLibrary {
         uint256 donateBalance = interest - allFee;
 
         IPoolManager(UNISWAP_V4).donate(poolKey, 0, donateBalance, "");
-        IPoolManager(UNISWAP_V4).sync(Currency.wrap(self.pegToken));
-        IPegToken(self.pegToken).mint(UNISWAP_V4, donateBalance);
+        IPoolManager(UNISWAP_V4).sync(poolKey.currency0);
+        IPegToken(Currency.unwrap(poolKey.currency0)).mint(UNISWAP_V4, donateBalance);
         IPoolManager(UNISWAP_V4).settle();
 
         self.lastUpdate = uint64(block.timestamp);
