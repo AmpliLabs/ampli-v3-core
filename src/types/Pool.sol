@@ -192,7 +192,7 @@ library PoolLibrary {
 
     /* LIQUIDATION */
 
-    function liquidate(Pool storage self, PoolKey memory poolKey, uint256 positionId) external {
+    function liquidate(Pool storage self, PoolKey memory poolKey, uint256 positionId) external returns (uint256 repaidAsset, int256 bedDebtAsset) {
         Position storage position = self.positions[positionId];
 
         accrueInterest(self, poolKey);
@@ -214,14 +214,12 @@ library PoolLibrary {
         if (borrowedAdjust != 0) {
             uint256 liquidationIncentiveFactor = Math.mulDivDown(borrowedAdjust, 1e18, maxBorrowedAdjust);
 
-            uint256 repaidAsset;
-
             if (liquidationIncentiveFactor >= MIN_LIQUIDATION_INCENTIVE_FACTOR) {
                 repaidAsset = borrowed;
             } else {
                 repaidAsset = Math.mulDivDown(maxBorrow, MIN_LIQUIDATION_INCENTIVE_FACTOR, 1e18);
 
-                int256 bedDebtAsset = int256(borrowed) - int256(repaidAsset);
+                bedDebtAsset = int256(borrowed) - int256(repaidAsset);
 
                 if (bedDebtAsset < 0) {
                     self.riskReverseFee += bedDebtAsset.toInt128();

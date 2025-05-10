@@ -85,7 +85,9 @@ contract Ampli is IAmpli {
 
         emit Repay(id, positionId, repayAsset, share);
     }
-    
+
+    /* WITHDRAW MANAGEMENT */
+
     function withdrawFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
         external
     {
@@ -102,5 +104,14 @@ contract Ampli is IAmpli {
         PoolId id = key.toId();
         _pools[id].withdrawNonFungibleCollateral(key, positionId, nonFungibleAssetId);
         emit WithdrawNonFungibleCollateral(id, positionId, nonFungibleAssetId.nft(), nonFungibleAssetId.tokenId());
+    }
+
+    /* LIQUIDATION */
+
+    function liquidate(PoolKey memory key, uint256 positionId) external {
+        PoolId id = key.toId();
+        (uint256 repaidAsset, int256 bedDebtAsset) = _pools[id].liquidate(key, positionId);
+
+        emit Liquidate(id, positionId, repaidAsset, uint256(-bedDebtAsset));
     }
 }
