@@ -4,8 +4,10 @@ pragma solidity 0.8.29;
 import {IAmpli} from "./interfaces/IAmpli.sol";
 import {IIrm} from "./interfaces/IIrm.sol";
 import {IOracle} from "./interfaces/IOracle.sol";
+import {IUnlockCallback} from "./interfaces/callback/IUnlockCallback.sol";
 import {PegToken} from "./tokenization/PegToken.sol";
 import {Pool} from "./types/Pool.sol";
+import {Locker} from "./types/Locker.sol";
 import {NonFungibleAssetId} from "./types/NonFungibleAssetId.sol";
 import {BorrowShare} from "./types/BorrowShare.sol";
 import {PoolId} from "v4-core/types/PoolId.sol";
@@ -15,6 +17,25 @@ import {IHooks} from "v4-core/interfaces/IHooks.sol";
 
 contract Ampli is IAmpli {
     mapping(PoolId id => Pool) internal _pools;
+
+    modifier onlyWhenUnlocked() {
+        require(Locker.isUnlocked(), ManagerLocked());
+        _;
+    }
+
+    function unlock(bytes calldata data) external returns (bytes memory result) {
+        require(!Locker.isUnlocked(), AlreadyUnlocked());
+
+        Locker.unlock();
+
+        result = IUnlockCallback(msg.sender).unlockCallback(data);
+
+        for (uint256 i = 0; i < Locker.itemsLength(); i++) {
+            (PoolId id, uint256 positionId) = Locker.getCheckOutItem(i);
+            _pools[id].isHealthy(positionId);
+        }
+        Locker.lock();
+    }
 
     function initialize(
         address underlying,
@@ -52,6 +73,7 @@ contract Ampli is IAmpli {
 
     function supplyFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
         external
+        onlyWhenUnlocked
     {
         PoolId id = key.toId();
         address fungibleAddress = _pools[id].supplyFungibleCollateral(key, positionId, fungibleAssetId, amount);
@@ -60,6 +82,7 @@ contract Ampli is IAmpli {
 
     function supplyNonFungibleCollateral(PoolKey memory key, uint256 positionId, NonFungibleAssetId nonFungibleAssetId)
         external
+        onlyWhenUnlocked
     {
         PoolId id = key.toId();
         _pools[id].supplyNonFungibleCollateral(key, positionId, nonFungibleAssetId);
@@ -68,7 +91,10 @@ contract Ampli is IAmpli {
 
     /* BORROW MANAGEMENT */
 
-    function borrow(PoolKey memory key, uint256 positionId, address receiver, BorrowShare share) external {
+    function borrow(PoolKey memory key, uint256 positionId, address receiver, BorrowShare share)
+        external
+        onlyWhenUnlocked
+    {
         PoolId id = key.toId();
         uint256 borrowAsset = _pools[id].borrow(key, receiver, positionId, share);
 
@@ -77,7 +103,7 @@ contract Ampli is IAmpli {
         emit Borrow(id, positionId, receiver, borrowAsset, share);
     }
 
-    function repay(PoolKey memory key, uint256 positionId, BorrowShare share) external {
+    function repay(PoolKey memory key, uint256 positionId, BorrowShare share) external onlyWhenUnlocked {
         PoolId id = key.toId();
         uint256 repayAsset = _pools[id].repay(key, positionId, share);
 
@@ -90,6 +116,7 @@ contract Ampli is IAmpli {
 
     function withdrawFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
         external
+        onlyWhenUnlocked
     {
         PoolId id = key.toId();
         address fungibleAddress = _pools[id].withdrawFungibleCollateral(key, positionId, fungibleAssetId, amount);
@@ -100,7 +127,7 @@ contract Ampli is IAmpli {
         PoolKey memory key,
         uint256 positionId,
         NonFungibleAssetId nonFungibleAssetId
-    ) external {
+    ) external onlyWhenUnlocked {
         PoolId id = key.toId();
         _pools[id].withdrawNonFungibleCollateral(key, positionId, nonFungibleAssetId);
         emit WithdrawNonFungibleCollateral(id, positionId, nonFungibleAssetId.nft(), nonFungibleAssetId.tokenId());

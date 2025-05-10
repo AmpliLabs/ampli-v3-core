@@ -45,6 +45,7 @@ library PoolLibrary {
     error InvaildNonFungibleAsset();
 
     error PositionIsHealthy();
+    error PositionIsNotHealthy();
 
     uint256 constant MIN_LIQUIDATION_INCENTIVE_FACTOR = 0.99e18;
     address constant UNISWAP_V4 = 0x000000000004444c5dc75cB358380D2e3dE08A90;
@@ -192,7 +193,10 @@ library PoolLibrary {
 
     /* LIQUIDATION */
 
-    function liquidate(Pool storage self, PoolKey memory poolKey, uint256 positionId) external returns (uint256 repaidAsset, int256 bedDebtAsset) {
+    function liquidate(Pool storage self, PoolKey memory poolKey, uint256 positionId)
+        external
+        returns (uint256 repaidAsset, int256 bedDebtAsset)
+    {
         Position storage position = self.positions[positionId];
 
         accrueInterest(self, poolKey);
@@ -263,5 +267,23 @@ library PoolLibrary {
         IPoolManager(UNISWAP_V4).settle();
 
         self.lastUpdate = uint64(block.timestamp);
+    }
+
+    /* HELPER FUNCTIONS */
+
+    function isHealthy(Pool storage self, uint256 positionId) internal view {
+        Position storage position = self.positions[positionId];
+
+        // maxBorrow = collateral value, borrowed = borrow peg token value
+        (bool health,,) = position.isHealthy(
+            self.fungibleAssetParams,
+            self.nonFungibleAssetParams,
+            self.oracle,
+            self.reservesCount,
+            self.totalBorrowAssets,
+            self.totalBorrowShares
+        );
+
+        require(health, PositionIsNotHealthy());
     }
 }

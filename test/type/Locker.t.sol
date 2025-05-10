@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {Locker} from "src/types/Locker.sol";
 import {PoolId} from "v4-core/types/PoolId.sol";
 import {console} from "forge-std/console.sol";
+
 contract LockerTest is Test {
     struct GlobalPosition {
         PoolId id;
@@ -31,5 +32,8 @@ contract LockerTest is Test {
         }
 
         assertEq(Locker.itemsLength(), positions.length);
+
+        Locker.lock();
+        assertEq(Locker.itemsLength(), 0);
     }
 }

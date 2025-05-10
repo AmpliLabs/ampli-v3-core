@@ -9,6 +9,8 @@ import {PoolId} from "v4-core/types/PoolId.sol";
 import {Currency} from "v4-core/types/Currency.sol";
 
 interface IAmpli {
+    error ManagerLocked();
+    error AlreadyUnlocked();
     error InvaildOwner();
     error NotOwner();
     error InvaildFeeRatio();
