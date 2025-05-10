@@ -7,6 +7,7 @@ import {IOracle} from "./interfaces/IOracle.sol";
 import {PegToken} from "./tokenization/PegToken.sol";
 import {Pool} from "./types/Pool.sol";
 import {NonFungibleAssetId} from "./types/NonFungibleAssetId.sol";
+import {BorrowShare} from "./types/BorrowShare.sol";
 import {PoolId} from "v4-core/types/PoolId.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency} from "v4-core/types/Currency.sol";
@@ -47,6 +48,8 @@ contract Ampli is IAmpli {
         emit SetFee(id, feeRatio, ownerFeeRatio);
     }
 
+    /* SUPPLY MANAGEMENT */
+
     function supplyFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
         external
     {
@@ -55,20 +58,40 @@ contract Ampli is IAmpli {
         emit SupplyFungibleCollateral(id, positionId, fungibleAddress, amount);
     }
 
-    function withdrawFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
-        external
-    {
-        PoolId id = key.toId();
-        address fungibleAddress = _pools[id].withdrawFungibleCollateral(key, positionId, fungibleAssetId, amount);
-        emit WithdrawFungibleCollateral(id, positionId, fungibleAddress, amount);
-    }
-
     function supplyNonFungibleCollateral(PoolKey memory key, uint256 positionId, NonFungibleAssetId nonFungibleAssetId)
         external
     {
         PoolId id = key.toId();
         _pools[id].supplyNonFungibleCollateral(key, positionId, nonFungibleAssetId);
         emit SuppluNonFungibleCollateral(id, positionId, nonFungibleAssetId.nft(), nonFungibleAssetId.tokenId());
+    }
+
+    /* BORROW MANAGEMENT */
+
+    function borrow(PoolKey memory key, uint256 positionId, address receiver, BorrowShare share) external {
+        PoolId id = key.toId();
+        uint256 borrowAsset = _pools[id].borrow(key, receiver, positionId, share);
+
+        // TODO: checkout in lock
+
+        emit Borrow(id, positionId, receiver, borrowAsset, share);
+    }
+
+    function repay(PoolKey memory key, uint256 positionId, BorrowShare share) external {
+        PoolId id = key.toId();
+        uint256 repayAsset = _pools[id].repay(key, positionId, share);
+
+        // TODO: checkout in lock
+
+        emit Repay(id, positionId, repayAsset, share);
+    }
+    
+    function withdrawFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
+        external
+    {
+        PoolId id = key.toId();
+        address fungibleAddress = _pools[id].withdrawFungibleCollateral(key, positionId, fungibleAssetId, amount);
+        emit WithdrawFungibleCollateral(id, positionId, fungibleAddress, amount);
     }
 
     function withdrawNonFungibleCollateral(

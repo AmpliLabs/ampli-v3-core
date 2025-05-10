@@ -2,6 +2,7 @@
 pragma solidity >=0.8.0;
 
 import {NonFungibleAssetId} from "../types/NonFungibleAssetId.sol";
+import {BorrowShare} from "../types/BorrowShare.sol";
 import {IIrm} from "../interfaces/IIrm.sol";
 import {IOracle} from "../interfaces/IOracle.sol";
 import {PoolId} from "v4-core/types/PoolId.sol";
@@ -28,6 +29,10 @@ interface IAmpli {
     event WithdrawNonFungibleCollateral(
         PoolId indexed id, uint256 indexed positionId, address indexed asset, uint256 tokenId
     );
+    event Borrow(
+        PoolId indexed id, uint256 indexed positionId, address indexed receiver, uint256 assets, BorrowShare share
+    );
+    event Repay(PoolId indexed id, uint256 indexed positionId, uint256 assets, BorrowShare share);
     event SetOwner(PoolId indexed id, address indexed newOwner);
     event SetFee(PoolId indexed id, uint8 feeRatio, uint8 ownerFeeRatio);
     event SetFungibleCollateral(uint256 indexed id, address indexed asset, uint256 lltv);

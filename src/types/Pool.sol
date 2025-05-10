@@ -133,20 +133,26 @@ library PoolLibrary {
 
     /* BORROW MANAGEMENT */
 
-    function borrow(Pool storage self, address receiver, uint256 positionId, BorrowShare share) external {
+    function borrow(Pool storage self, PoolKey memory poolKey, address receiver, uint256 positionId, BorrowShare share)
+        external
+        returns (uint256 borrowAsset)
+    {
         Position storage position = self.positions[positionId];
         position.borrow(share);
 
-        uint256 borrowAsset = share.toAssetsDown(self.totalBorrowAssets, self.totalBorrowShares);
-        IPegToken(self.pegToken).mint(receiver, borrowAsset);
+        borrowAsset = share.toAssetsDown(self.totalBorrowAssets, self.totalBorrowShares);
+        IPegToken(Currency.unwrap(poolKey.currency0)).mint(receiver, borrowAsset);
     }
 
-    function repay(Pool storage self, uint256 positionId, BorrowShare share) external {
+    function repay(Pool storage self, PoolKey memory poolKey, uint256 positionId, BorrowShare share)
+        external
+        returns (uint256 repayAsset)
+    {
         Position storage position = self.positions[positionId];
         position.repay(share);
 
-        uint256 repayAsset = share.toAssetsUp(self.totalBorrowAssets, self.totalBorrowShares);
-        IPegToken(self.pegToken).burn(msg.sender, repayAsset);
+        repayAsset = share.toAssetsUp(self.totalBorrowAssets, self.totalBorrowShares);
+        IPegToken(Currency.unwrap(poolKey.currency0)).burn(msg.sender, repayAsset);
     }
 
     /* WITHDRAW MANAGEMENT */
