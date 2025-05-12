@@ -77,6 +77,8 @@ contract Ampli is IAmpli {
     {
         PoolId id = key.toId();
         address fungibleAddress = _pools[id].supplyFungibleCollateral(key, positionId, fungibleAssetId, amount);
+        Locker.checkOutItems(id, positionId);
+
         emit SupplyFungibleCollateral(id, positionId, fungibleAddress, amount);
     }
 
@@ -86,6 +88,8 @@ contract Ampli is IAmpli {
     {
         PoolId id = key.toId();
         _pools[id].supplyNonFungibleCollateral(key, positionId, nonFungibleAssetId);
+        Locker.checkOutItems(id, positionId);
+
         emit SuppluNonFungibleCollateral(id, positionId, nonFungibleAssetId.nft(), nonFungibleAssetId.tokenId());
     }
 
@@ -97,8 +101,7 @@ contract Ampli is IAmpli {
     {
         PoolId id = key.toId();
         uint256 borrowAsset = _pools[id].borrow(key, receiver, positionId, share);
-
-        // TODO: checkout in lock
+        Locker.checkOutItems(id, positionId);
 
         emit Borrow(id, positionId, receiver, borrowAsset, share);
     }
@@ -106,8 +109,7 @@ contract Ampli is IAmpli {
     function repay(PoolKey memory key, uint256 positionId, BorrowShare share) external onlyWhenUnlocked {
         PoolId id = key.toId();
         uint256 repayAsset = _pools[id].repay(key, positionId, share);
-
-        // TODO: checkout in lock
+        Locker.checkOutItems(id, positionId);
 
         emit Repay(id, positionId, repayAsset, share);
     }
@@ -120,6 +122,8 @@ contract Ampli is IAmpli {
     {
         PoolId id = key.toId();
         address fungibleAddress = _pools[id].withdrawFungibleCollateral(key, positionId, fungibleAssetId, amount);
+        Locker.checkOutItems(id, positionId);
+        
         emit WithdrawFungibleCollateral(id, positionId, fungibleAddress, amount);
     }
 
@@ -130,6 +134,8 @@ contract Ampli is IAmpli {
     ) external onlyWhenUnlocked {
         PoolId id = key.toId();
         _pools[id].withdrawNonFungibleCollateral(key, positionId, nonFungibleAssetId);
+        Locker.checkOutItems(id, positionId);
+        
         emit WithdrawNonFungibleCollateral(id, positionId, nonFungibleAssetId.nft(), nonFungibleAssetId.tokenId());
     }
 
