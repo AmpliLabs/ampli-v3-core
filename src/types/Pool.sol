@@ -46,6 +46,7 @@ library PoolLibrary {
 
     error PositionIsHealthy();
     error PositionIsNotHealthy();
+    error OnlyOwner();
 
     uint256 constant MIN_LIQUIDATION_INCENTIVE_FACTOR = 0.99e18;
     address constant UNISWAP_V4 = 0x000000000004444c5dc75cB358380D2e3dE08A90;
@@ -74,19 +75,40 @@ library PoolLibrary {
         self.reservesCount = 2;
     }
 
-    function setOwner(Pool storage self, address newOwner) external {
+    function onlyOwner(Pool storage self) internal view {
+        require(msg.sender == self.owner, OnlyOwner());
+    }
+
+    function setOwner(Pool storage self, address newOwner) internal {
         self.owner = newOwner;
     }
 
-    function enableFungibleCollateral(Pool storage self, address reserve, uint96 lltv) external {
-        self.fungibleAssetParams[self.reservesCount] = FungibleAssetParams({asset: reserve, lltv: lltv});
+    function enableFungibleCollateral(Pool storage self, address reserve, uint96 lltv)
+        internal
+        returns (uint256 assetId)
+    {
+        assetId = self.reservesCount;
+        self.fungibleAssetParams[assetId] = FungibleAssetParams({asset: reserve, lltv: lltv});
 
         self.reservesCount += 1;
     }
 
-    function enableNonFungibleCollateral(Pool storage self, address reserve, uint256 lltv) external {
+    function updateFungibleCollateral(Pool storage self, uint256 fungibleAssetId, uint96 lltv)
+        internal
+        returns (address fungibleAddress)
+    {
+        fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
+        self.fungibleAssetParams[fungibleAssetId].lltv = lltv;
+    }
+
+    function updateNonFungibleCollateral(Pool storage self, address reserve, uint256 lltv) internal {
         self.nonFungibleAssetParams[reserve] = lltv;
         self.isNFTCollateral[reserve] = true;
+    }
+
+    function updateFeeRatio(Pool storage self, uint8 feeRatio, uint8 ownerFeeRatio) internal {
+        self.feeRatio = feeRatio;
+        self.ownerFeeRatio = ownerFeeRatio;
     }
 
     /* SUPPLY MANAGEMENT */
@@ -98,7 +120,7 @@ library PoolLibrary {
         uint256 positionId,
         uint256 fungibleAssetId,
         uint256 amount
-    ) external returns (address fungibleAddress) {
+    ) internal returns (address fungibleAddress) {
         fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
 
         require(self.fungibleAssetParams[fungibleAssetId].lltv != 0, InvaildFungibleAsset());
@@ -117,7 +139,7 @@ library PoolLibrary {
         PoolKey memory poolKey,
         uint256 positionId,
         NonFungibleAssetId nonFungibleAssetId
-    ) external {
+    ) internal {
         Position storage position = self.positions[positionId];
         address nftAddress = nonFungibleAssetId.nft();
         uint256 tokenId = nonFungibleAssetId.tokenId();
@@ -134,7 +156,7 @@ library PoolLibrary {
     /* BORROW MANAGEMENT */
 
     function borrow(Pool storage self, PoolKey memory poolKey, address receiver, uint256 positionId, BorrowShare share)
-        external
+        internal
         returns (uint256 borrowAsset)
     {
         Position storage position = self.positions[positionId];
@@ -145,7 +167,7 @@ library PoolLibrary {
     }
 
     function repay(Pool storage self, PoolKey memory poolKey, uint256 positionId, BorrowShare share)
-        external
+        internal
         returns (uint256 repayAsset)
     {
         Position storage position = self.positions[positionId];
@@ -196,7 +218,7 @@ library PoolLibrary {
     /* LIQUIDATION */
 
     function liquidate(Pool storage self, PoolKey memory poolKey, uint256 positionId)
-        external
+        internal
         returns (uint256 repaidAsset, int256 bedDebtAsset)
     {
         Position storage position = self.positions[positionId];
@@ -261,6 +283,7 @@ library PoolLibrary {
         }
 
         uint256 donateBalance = interest - allFee;
+
         IPoolManager(UNISWAP_V4).donate(poolKey, 0, donateBalance, "");
         IPoolManager(UNISWAP_V4).sync(poolKey.currency0);
         IPegToken(Currency.unwrap(poolKey.currency0)).mint(UNISWAP_V4, donateBalance);
@@ -268,7 +291,7 @@ library PoolLibrary {
 
         self.lastUpdate = uint64(block.timestamp);
     }
-    
+
     /* HELPER FUNCTIONS */
 
     function isHealthy(Pool storage self, uint256 positionId) internal view {
@@ -286,5 +309,4 @@ library PoolLibrary {
 
         require(health, PositionIsNotHealthy());
     }
-
 }
