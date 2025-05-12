@@ -46,7 +46,6 @@ library PoolLibrary {
 
     error PositionIsHealthy();
     error PositionIsNotHealthy();
-
     error OnlyOwner();
 
     uint256 constant MIN_LIQUIDATION_INCENTIVE_FACTOR = 0.99e18;
@@ -123,6 +122,7 @@ library PoolLibrary {
         uint256 amount
     ) internal returns (address fungibleAddress) {
         fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
+
         require(self.fungibleAssetParams[fungibleAssetId].lltv != 0, InvaildFungibleAsset());
 
         Position storage position = self.positions[positionId];
@@ -187,6 +187,7 @@ library PoolLibrary {
         uint256 amount
     ) internal returns (address fungibleAddress) {
         fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
+
         require(fungibleAddress != address(0), InvaildFungibleAsset());
 
         Position storage position = self.positions[positionId];
@@ -245,7 +246,6 @@ library PoolLibrary {
                 repaidAsset = borrowed;
             } else {
                 repaidAsset = Math.mulDivDown(maxBorrow, MIN_LIQUIDATION_INCENTIVE_FACTOR, 1e18);
-
                 bedDebtAsset = int256(borrowed) - int256(repaidAsset);
 
                 if (bedDebtAsset < 0) {
