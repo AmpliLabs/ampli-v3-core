@@ -77,7 +77,7 @@ library PositionLibrary {
         uint256 totalBorrowAsset,
         BorrowShare totalBorrowShare
     ) internal view returns (bool, uint256, uint256) {
-        if (self.funibles.isZero() && (self.nonFungibleAssets.length() > 0)) {
+        if (self.funibles.isZero() && (self.nonFungibleAssets.length() == 0)) {
             return (false, 0, 0);
         }
 
