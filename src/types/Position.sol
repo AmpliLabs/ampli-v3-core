@@ -109,4 +109,22 @@ library PositionLibrary {
             return (maxBorrow >= borrowed, maxBorrow, borrowed);
         }
     }
+
+    function adjust(Position storage self, uint256 maxBorrowed, uint256 borrowed)
+        internal
+        returns (uint256 maxBorrowedAdjust, uint256 borrowedAdjust)
+    {
+        uint256 collateralPeg = self.collateralFungibleAssets[1];
+
+        if (collateralPeg >= borrowed) {
+            borrowedAdjust = 0;
+
+            self.collateralFungibleAssets[1] = collateralPeg - borrowed;
+        } else {
+            maxBorrowedAdjust = maxBorrowed - collateralPeg.mulPercentUp(0.99e6);
+            borrowedAdjust = borrowed - collateralPeg;
+
+            self.collateralFungibleAssets[1] = 0;
+        }
+    }
 }

@@ -18,4 +18,9 @@ library Math {
     function mulPercentDown(uint256 x, uint256 y) internal pure returns (uint256) {
         return (x * y) / PERCENTAGE_PRECISION;
     }
+
+    /// @dev Returns (`x` * `y`) / `PERCENTAGE_PRECISION` rounded up.
+    function mulPercentUp(uint256 x, uint256 y) internal pure returns (uint256) {
+        return (x * y + (PERCENTAGE_PRECISION - 1)) / PERCENTAGE_PRECISION;
+    }
 }
