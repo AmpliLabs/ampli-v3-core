@@ -51,6 +51,7 @@ library PoolLibrary {
     error PositionIsHealthy();
 
     uint256 constant MIN_LIQUIDATION_INCENTIVE_FACTOR = 0.99e18;
+
     address constant UNISWAP_V4 = 0x000000000004444c5dc75cB358380D2e3dE08A90;
     uint160 constant INIT_PRICE = 0x1000000000000000000000000;
 
@@ -194,7 +195,7 @@ library PoolLibrary {
     }
 
     /* LIQUIDATION */
-
+    
     function liquidate(Pool storage self, uint256 positionId) external {
         Position storage position = self.positions[positionId];
 
