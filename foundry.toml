@@ -2,8 +2,13 @@
 src = "src"
 out = "out"
 libs = ["dependencies"]
+remappings = [
+    "forge-std/=dependencies/forge-std-1.9.7/src/",
+    "v4-core/=dependencies/uniswap-v4-core-4/src/",
+]
 
 [dependencies]
 forge-std = "1.9.7"
+uniswap-v4-core = "4"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
