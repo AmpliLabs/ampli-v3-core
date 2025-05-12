@@ -123,7 +123,7 @@ contract Ampli is IAmpli {
         PoolId id = key.toId();
         address fungibleAddress = _pools[id].withdrawFungibleCollateral(key, positionId, fungibleAssetId, amount);
         Locker.checkOutItems(id, positionId);
-        
+
         emit WithdrawFungibleCollateral(id, positionId, fungibleAddress, amount);
     }
 
@@ -135,7 +135,7 @@ contract Ampli is IAmpli {
         PoolId id = key.toId();
         _pools[id].withdrawNonFungibleCollateral(key, positionId, nonFungibleAssetId);
         Locker.checkOutItems(id, positionId);
-        
+
         emit WithdrawNonFungibleCollateral(id, positionId, nonFungibleAssetId.nft(), nonFungibleAssetId.tokenId());
     }
 
