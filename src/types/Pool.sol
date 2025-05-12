@@ -100,6 +100,7 @@ library PoolLibrary {
         uint256 amount
     ) external returns (address fungibleAddress) {
         fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
+
         require(self.fungibleAssetParams[fungibleAssetId].lltv != 0, InvaildFungibleAsset());
 
         Position storage position = self.positions[positionId];
@@ -164,6 +165,7 @@ library PoolLibrary {
         uint256 amount
     ) internal returns (address fungibleAddress) {
         fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
+
         require(fungibleAddress != address(0), InvaildFungibleAsset());
 
         Position storage position = self.positions[positionId];
@@ -222,7 +224,6 @@ library PoolLibrary {
                 repaidAsset = borrowed;
             } else {
                 repaidAsset = Math.mulDivDown(maxBorrow, MIN_LIQUIDATION_INCENTIVE_FACTOR, 1e18);
-
                 bedDebtAsset = int256(borrowed) - int256(repaidAsset);
 
                 if (bedDebtAsset < 0) {
@@ -260,7 +261,6 @@ library PoolLibrary {
         }
 
         uint256 donateBalance = interest - allFee;
-
         IPoolManager(UNISWAP_V4).donate(poolKey, 0, donateBalance, "");
         IPoolManager(UNISWAP_V4).sync(poolKey.currency0);
         IPegToken(Currency.unwrap(poolKey.currency0)).mint(UNISWAP_V4, donateBalance);
@@ -268,7 +268,7 @@ library PoolLibrary {
 
         self.lastUpdate = uint64(block.timestamp);
     }
-
+    
     /* HELPER FUNCTIONS */
 
     function isHealthy(Pool storage self, uint256 positionId) internal view {
@@ -286,4 +286,5 @@ library PoolLibrary {
 
         require(health, PositionIsNotHealthy());
     }
+
 }
