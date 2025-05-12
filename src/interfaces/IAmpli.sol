@@ -38,6 +38,6 @@ interface IAmpli {
     event Liquidate(PoolId indexed id, uint256 indexed positionId, uint256 repaidAsset, uint256 bedDebtAsset);
     event SetOwner(PoolId indexed id, address indexed newOwner);
     event SetFee(PoolId indexed id, uint8 feeRatio, uint8 ownerFeeRatio);
-    event SetFungibleCollateral(uint256 indexed id, address indexed asset, uint256 lltv);
-    event SetNonFungibleCollateral(address indexed asset, uint256 lltv);
+    event SetFungibleCollateral(PoolId indexed id, uint256 indexed assetId, address indexed asset, uint256 lltv);
+    event SetNonFungibleCollateral(PoolId indexed id, address indexed asset, uint256 lltv);
 }
