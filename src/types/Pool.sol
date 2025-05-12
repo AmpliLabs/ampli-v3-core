@@ -11,14 +11,12 @@ import {NonFungibleAssetId} from "./NonFungibleAssetId.sol";
 import {SafeTransferLibrary} from "../libraries/SafeTransfer.sol";
 import {Math} from "../libraries/Math.sol";
 import {SafeCast} from "../libraries/SafeCast.sol";
-import {PegToken} from "../tokenization/PegToken.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
+import {PoolId} from "v4-core/types/PoolId.sol";
 import {Currency} from "v4-core/types/Currency.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
-import {IHooks} from "v4-core/interfaces/IHooks.sol";
 
 struct Pool {
-    address pegToken;
     IIrm irm;
     IOracle oracle;
     address owner;
@@ -30,7 +28,6 @@ struct Pool {
     int128 riskReverseFee;
     uint256 totalBorrowAssets;
     BorrowShare totalBorrowShares;
-    PoolKey poolKey;
     mapping(uint256 fungibleAssetId => FungibleAssetParams) fungibleAssetParams;
     mapping(address nft => bool isCollateral) isNFTCollateral;
     mapping(address nft => uint256 lltv) nonFungibleAssetParams;
@@ -46,53 +43,33 @@ library PoolLibrary {
 
     error InvaildFungibleAsset();
     error InvaildNonFungibleAsset();
-    error InvaildFeeRatio();
-    error InvaildPegTokenSalt();
+
     error PositionIsHealthy();
+    error PositionIsNotHealthy();
 
     uint256 constant MIN_LIQUIDATION_INCENTIVE_FACTOR = 0.99e18;
-
     address constant UNISWAP_V4 = 0x000000000004444c5dc75cB358380D2e3dE08A90;
     uint160 constant INIT_PRICE = 0x1000000000000000000000000;
 
     function initialize(
         Pool storage self,
+        PoolKey memory poolKey,
         address owner,
-        address underlying,
         IIrm irm,
         IOracle oracle,
         uint8 feeRatio,
-        uint8 ownerFeeRatio,
-        bytes32 salt
+        uint8 ownerFeeRatio
     ) internal {
-        // TODO: create2 pet token and set hook as owner
-        // Depoly pegToken as token 0
-        require(ownerFeeRatio < 100, InvaildFeeRatio());
-        require(feeRatio < 100, InvaildFeeRatio());
-
-        address pegToken = address(new PegToken{salt: salt}(underlying, address(this)));
-        require(underlying < pegToken, InvaildPegTokenSalt());
-
-        PoolKey memory poolKey = PoolKey({
-            currency0: Currency.wrap(pegToken),
-            currency1: Currency.wrap(underlying),
-            fee: 100, // 0.01%
-            tickSpacing: 1,
-            hooks: IHooks(address(this))
-        });
-
         IPoolManager(UNISWAP_V4).initialize(poolKey, INIT_PRICE);
 
-        self.pegToken = pegToken;
         self.irm = irm;
         self.oracle = oracle;
         self.owner = owner;
         self.feeRatio = feeRatio;
         self.ownerFeeRatio = ownerFeeRatio;
-        self.poolKey = poolKey;
 
-        self.fungibleAssetParams[0] = FungibleAssetParams({asset: underlying, lltv: 1e6});
-        self.fungibleAssetParams[1] = FungibleAssetParams({asset: pegToken, lltv: 0.99e6});
+        self.fungibleAssetParams[0] = FungibleAssetParams({asset: Currency.unwrap(poolKey.currency1), lltv: 1e6});
+        self.fungibleAssetParams[1] = FungibleAssetParams({asset: Currency.unwrap(poolKey.currency0), lltv: 0.99e6});
 
         self.reservesCount = 2;
     }
@@ -115,31 +92,39 @@ library PoolLibrary {
     /* SUPPLY MANAGEMENT */
 
     // TODO: pool id in position id
-    function supplyFungibleCollateral(Pool storage self, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
-        external
-    {
-        address fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
+    function supplyFungibleCollateral(
+        Pool storage self,
+        PoolKey memory poolKey,
+        uint256 positionId,
+        uint256 fungibleAssetId,
+        uint256 amount
+    ) external returns (address fungibleAddress) {
+        fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
+
         require(self.fungibleAssetParams[fungibleAssetId].lltv != 0, InvaildFungibleAsset());
 
         Position storage position = self.positions[positionId];
 
-        accrueInterest(self);
+        accrueInterest(self, poolKey);
 
         position.addFungible(fungibleAssetId, amount);
 
         fungibleAddress.safeTransferFrom(msg.sender, address(this), amount);
     }
 
-    function supplyNonFungibleCollateral(Pool storage self, uint256 positionId, NonFungibleAssetId nonFungibleAssetId)
-        external
-    {
+    function supplyNonFungibleCollateral(
+        Pool storage self,
+        PoolKey memory poolKey,
+        uint256 positionId,
+        NonFungibleAssetId nonFungibleAssetId
+    ) external {
         Position storage position = self.positions[positionId];
         address nftAddress = nonFungibleAssetId.nft();
         uint256 tokenId = nonFungibleAssetId.tokenId();
 
         require(self.isNFTCollateral[nftAddress], InvaildNonFungibleAsset());
 
-        accrueInterest(self);
+        accrueInterest(self, poolKey);
 
         position.addNonFungible(nonFungibleAssetId);
 
@@ -148,58 +133,75 @@ library PoolLibrary {
 
     /* BORROW MANAGEMENT */
 
-    function borrow(Pool storage self, address receiver, uint256 positionId, BorrowShare share) external {
+    function borrow(Pool storage self, PoolKey memory poolKey, address receiver, uint256 positionId, BorrowShare share)
+        external
+        returns (uint256 borrowAsset)
+    {
         Position storage position = self.positions[positionId];
         position.borrow(share);
 
-        uint256 borrowAsset = share.toAssetsDown(self.totalBorrowAssets, self.totalBorrowShares);
-        IPegToken(self.pegToken).mint(receiver, borrowAsset);
+        borrowAsset = share.toAssetsDown(self.totalBorrowAssets, self.totalBorrowShares);
+        IPegToken(Currency.unwrap(poolKey.currency0)).mint(receiver, borrowAsset);
     }
 
-    function repay(Pool storage self, uint256 positionId, BorrowShare share) external {
+    function repay(Pool storage self, PoolKey memory poolKey, uint256 positionId, BorrowShare share)
+        external
+        returns (uint256 repayAsset)
+    {
         Position storage position = self.positions[positionId];
         position.repay(share);
 
-        uint256 repayAsset = share.toAssetsUp(self.totalBorrowAssets, self.totalBorrowShares);
-        IPegToken(self.pegToken).burn(msg.sender, repayAsset);
+        repayAsset = share.toAssetsUp(self.totalBorrowAssets, self.totalBorrowShares);
+        IPegToken(Currency.unwrap(poolKey.currency0)).burn(msg.sender, repayAsset);
     }
 
     /* WITHDRAW MANAGEMENT */
 
-    function withdrawFungibleCollateral(Pool storage self, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
-        internal
-    {
-        address fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
+    function withdrawFungibleCollateral(
+        Pool storage self,
+        PoolKey memory poolKey,
+        uint256 positionId,
+        uint256 fungibleAssetId,
+        uint256 amount
+    ) internal returns (address fungibleAddress) {
+        fungibleAddress = self.fungibleAssetParams[fungibleAssetId].asset;
+
         require(fungibleAddress != address(0), InvaildFungibleAsset());
 
         Position storage position = self.positions[positionId];
 
-        accrueInterest(self);
+        accrueInterest(self, poolKey);
 
         position.removeFungible(fungibleAssetId, amount);
 
         fungibleAddress.safeTransfer(msg.sender, amount);
     }
 
-    function withdrawNonFungibleCollateral(Pool storage self, uint256 positionId, NonFungibleAssetId nonFungibleAssetId)
-        internal
-    {
+    function withdrawNonFungibleCollateral(
+        Pool storage self,
+        PoolKey memory poolKey,
+        uint256 positionId,
+        NonFungibleAssetId nonFungibleAssetId
+    ) internal {
         Position storage position = self.positions[positionId];
         address nftAddress = nonFungibleAssetId.nft();
         uint256 tokenId = nonFungibleAssetId.tokenId();
 
-        accrueInterest(self);
+        accrueInterest(self, poolKey);
 
         position.removeNonFungible(nonFungibleAssetId);
         nftAddress.safeTransfer(msg.sender, tokenId);
     }
 
     /* LIQUIDATION */
-    
-    function liquidate(Pool storage self, uint256 positionId) external {
+
+    function liquidate(Pool storage self, PoolKey memory poolKey, uint256 positionId)
+        external
+        returns (uint256 repaidAsset, int256 bedDebtAsset)
+    {
         Position storage position = self.positions[positionId];
 
-        accrueInterest(self);
+        accrueInterest(self, poolKey);
 
         // maxBorrow = collateral value, borrowed = borrow peg token value
         (bool health, uint256 maxBorrow, uint256 borrowed) = position.isHealthy(
@@ -218,21 +220,18 @@ library PoolLibrary {
         if (borrowedAdjust != 0) {
             uint256 liquidationIncentiveFactor = Math.mulDivDown(borrowedAdjust, 1e18, maxBorrowedAdjust);
 
-            uint256 repaidAsset;
-
             if (liquidationIncentiveFactor >= MIN_LIQUIDATION_INCENTIVE_FACTOR) {
                 repaidAsset = borrowed;
             } else {
                 repaidAsset = Math.mulDivDown(maxBorrow, MIN_LIQUIDATION_INCENTIVE_FACTOR, 1e18);
-
-                int256 bedDebtAsset = int256(borrowed) - int256(repaidAsset);
+                bedDebtAsset = int256(borrowed) - int256(repaidAsset);
 
                 if (bedDebtAsset < 0) {
                     self.riskReverseFee += bedDebtAsset.toInt128();
                 }
             }
 
-            IPegToken(self.pegToken).burn(msg.sender, repaidAsset);
+            IPegToken(Currency.unwrap(poolKey.currency0)).burn(msg.sender, repaidAsset);
         }
 
         position.owner = msg.sender;
@@ -241,11 +240,11 @@ library PoolLibrary {
 
     /* INTEREST MANAGEMENT */
 
-    function accrueInterest(Pool storage self) internal {
+    function accrueInterest(Pool storage self, PoolKey memory poolKey) internal {
         uint256 elapsed = block.timestamp - self.lastUpdate;
         if (elapsed == 0) return;
 
-        uint256 interest = self.irm.borrowRate(self.poolKey).compound(self.totalBorrowAssets, elapsed);
+        uint256 interest = self.irm.borrowRate(poolKey).compound(self.totalBorrowAssets, elapsed);
 
         self.totalBorrowAssets += interest;
 
@@ -262,12 +261,30 @@ library PoolLibrary {
         }
 
         uint256 donateBalance = interest - allFee;
-
-        IPoolManager(UNISWAP_V4).donate(self.poolKey, 0, donateBalance, "");
-        IPoolManager(UNISWAP_V4).sync(Currency.wrap(self.pegToken));
-        IPegToken(self.pegToken).mint(UNISWAP_V4, donateBalance);
+        IPoolManager(UNISWAP_V4).donate(poolKey, 0, donateBalance, "");
+        IPoolManager(UNISWAP_V4).sync(poolKey.currency0);
+        IPegToken(Currency.unwrap(poolKey.currency0)).mint(UNISWAP_V4, donateBalance);
         IPoolManager(UNISWAP_V4).settle();
 
         self.lastUpdate = uint64(block.timestamp);
     }
+    
+    /* HELPER FUNCTIONS */
+
+    function isHealthy(Pool storage self, uint256 positionId) internal view {
+        Position storage position = self.positions[positionId];
+
+        // maxBorrow = collateral value, borrowed = borrow peg token value
+        (bool health,,) = position.isHealthy(
+            self.fungibleAssetParams,
+            self.nonFungibleAssetParams,
+            self.oracle,
+            self.reservesCount,
+            self.totalBorrowAssets,
+            self.totalBorrowShares
+        );
+
+        require(health, PositionIsNotHealthy());
+    }
+
 }
