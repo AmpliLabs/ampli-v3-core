@@ -104,7 +104,7 @@ contract PositionTest is Test {
         assertEq(position.owner, liquidator);
     }
 
-    function test_isHealthy() public {
+    function test_fungible_isHealthy() public {
         (bool isHealth, uint256 maxBorrow, uint256 borrowed) =
             position.isHealthy(fungibleAssetParams, nonFungibleAssetLltv, oracle, 1, 0, BorrowShare.wrap(0));
 
