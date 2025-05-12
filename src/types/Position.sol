@@ -12,7 +12,7 @@ import {BorrowShare} from "./BorrowShare.sol";
 struct Position {
     address owner;
     BorrowShare borrowShares;
-    FungibleConfigurationMap funibles;
+    FungibleConfigurationMap fungibles;
     mapping(uint256 id => uint256 balance) collateralFungibleAssets;
     NonFungibleAssetSet nonFungibleAssets;
 }
@@ -30,8 +30,8 @@ library PositionLibrary {
     function addFungible(Position storage self, uint256 fungibleAssetId, uint256 amount) internal {
         self.collateralFungibleAssets[fungibleAssetId] += amount;
 
-        if (!self.funibles.isUsingAsCollateral(fungibleAssetId)) {
-            self.funibles.setAssetAsCollateral(fungibleAssetId, true);
+        if (!self.fungibles.isUsingAsCollateral(fungibleAssetId)) {
+            self.fungibles.setAssetAsCollateral(fungibleAssetId, true);
         }
     }
 
@@ -40,7 +40,7 @@ library PositionLibrary {
         uint256 updateAmount = collateralAmount - amount;
 
         if (updateAmount == 0) {
-            self.funibles.setAssetAsCollateral(fungibleAssetId, false);
+            self.fungibles.setAssetAsCollateral(fungibleAssetId, false);
         }
 
         self.collateralFungibleAssets[fungibleAssetId] = updateAmount;
@@ -77,7 +77,7 @@ library PositionLibrary {
         uint256 totalBorrowAsset,
         BorrowShare totalBorrowShare
     ) internal view returns (bool, uint256, uint256) {
-        if (self.funibles.isZero() && (self.nonFungibleAssets.length() > 0)) {
+        if (self.fungibles.isZero() && (self.nonFungibleAssets.length() == 0)) {
             return (false, 0, 0);
         }
 
@@ -85,7 +85,7 @@ library PositionLibrary {
         uint256 maxBorrow = 0;
 
         for (uint256 i = 0; i < reserveCount; i++) {
-            if (self.funibles.isUsingAsCollateral(i)) {
+            if (self.fungibles.isUsingAsCollateral(i)) {
                 uint256 collateral = self.collateralFungibleAssets[i];
                 uint256 collateralPrice = oracle.fungibleAssetPrice(i);
 

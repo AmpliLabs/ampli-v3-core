@@ -154,7 +154,7 @@ contract Ampli is IAmpli {
     function repay(PoolKey memory key, uint256 positionId, BorrowShare share) external onlyWhenUnlocked {
         PoolId id = key.toId();
         uint256 repayAsset = _pools[id].repay(key, positionId, share);
-
+        
         // TODO: checkout in lock
 
         emit Repay(id, positionId, repayAsset, share);

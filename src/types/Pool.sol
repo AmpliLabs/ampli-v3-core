@@ -246,6 +246,7 @@ library PoolLibrary {
                 repaidAsset = borrowed;
             } else {
                 repaidAsset = Math.mulDivDown(maxBorrow, MIN_LIQUIDATION_INCENTIVE_FACTOR, 1e18);
+
                 bedDebtAsset = int256(borrowed) - int256(repaidAsset);
 
                 if (bedDebtAsset < 0) {
