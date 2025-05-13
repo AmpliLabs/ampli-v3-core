@@ -50,7 +50,7 @@ contract Ampli is IAmpli {
         require(feeRatio < 100, InvaildFeeRatio());
 
         address pegToken = address(new PegToken{salt: salt}(underlying, address(this)));
-        require(underlying < pegToken, InvaildPegTokenSalt());
+        require(pegToken < underlying, InvaildPegTokenSalt());
 
         PoolKey memory key = PoolKey({
             currency0: Currency.wrap(pegToken),
@@ -119,7 +119,6 @@ contract Ampli is IAmpli {
 
     function supplyFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
         external
-        onlyWhenUnlocked
     {
         PoolId id = key.toId();
         address fungibleAddress = _pools[id].supplyFungibleCollateral(key, positionId, fungibleAssetId, amount);
@@ -129,7 +128,6 @@ contract Ampli is IAmpli {
 
     function supplyNonFungibleCollateral(PoolKey memory key, uint256 positionId, NonFungibleAssetId nonFungibleAssetId)
         external
-        onlyWhenUnlocked
     {
         PoolId id = key.toId();
         _pools[id].supplyNonFungibleCollateral(key, positionId, nonFungibleAssetId);
@@ -146,7 +144,7 @@ contract Ampli is IAmpli {
         PoolId id = key.toId();
         uint256 borrowAsset = _pools[id].borrow(key, receiver, positionId, share);
 
-        // TODO: checkout in lock
+        Locker.checkOutItems(id, positionId);
 
         emit Borrow(id, positionId, receiver, borrowAsset, share);
     }
@@ -154,8 +152,8 @@ contract Ampli is IAmpli {
     function repay(PoolKey memory key, uint256 positionId, BorrowShare share) external onlyWhenUnlocked {
         PoolId id = key.toId();
         uint256 repayAsset = _pools[id].repay(key, positionId, share);
-        
-        // TODO: checkout in lock
+
+        Locker.checkOutItems(id, positionId);
 
         emit Repay(id, positionId, repayAsset, share);
     }

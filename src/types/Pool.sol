@@ -49,7 +49,7 @@ library PoolLibrary {
     error OnlyOwner();
 
     uint256 constant MIN_LIQUIDATION_INCENTIVE_FACTOR = 0.99e18;
-    address constant UNISWAP_V4 = 0x000000000004444c5dc75cB358380D2e3dE08A90;
+    address constant UNISWAP_V4 = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     uint160 constant INIT_PRICE = 0x1000000000000000000000000;
 
     function initialize(
