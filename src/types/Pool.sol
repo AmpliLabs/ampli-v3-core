@@ -41,6 +41,7 @@ library PoolLibrary {
     using SafeCast for uint256;
     using SafeCast for int256;
 
+    error PoolAlreadyInitialized();
     error InvaildFungibleAsset();
     error InvaildNonFungibleAsset();
 
@@ -61,6 +62,7 @@ library PoolLibrary {
         uint8 feeRatio,
         uint8 ownerFeeRatio
     ) internal {
+        require(self.reservesCount == 0, PoolAlreadyInitialized());
         IPoolManager(UNISWAP_V4).initialize(poolKey, INIT_PRICE);
 
         self.irm = irm;
@@ -69,7 +71,9 @@ library PoolLibrary {
         self.feeRatio = feeRatio;
         self.ownerFeeRatio = ownerFeeRatio;
 
+        // underlyingToken
         self.fungibleAssetParams[0] = FungibleAssetParams({asset: Currency.unwrap(poolKey.currency1), lltv: 1e6});
+        // pegToken
         self.fungibleAssetParams[1] = FungibleAssetParams({asset: Currency.unwrap(poolKey.currency0), lltv: 0.99e6});
 
         self.reservesCount = 2;
