@@ -1,7 +1,7 @@
 # Ampli
 
-**Permissionless system for on-demand leverage**  
-_Ampli is the most expressive, composable, and frictionless margin platform. Built on Uniswap v4 for DeFi power users._
+**Permissionless platform for on-demand leverage**  
+_Ampli is the most expressive, composable, and frictionless margin protocol. Built on Uniswap v4 for DeFi power users._
 
 ---
 
@@ -27,7 +27,7 @@ Each Ampli market is defined by a base token (e.g., ETH, USDC) and a set of cust
 - Real-time interest updates and LP rewards via hooks
 - ETH used directly instead of WETH
 
-### v3 – System for Margin Markets
+### v3 – Expressive System for Margin Markets
 
 - Anyone can launch a custom margin market with specified base token
 - New debt token + Uniswap v4 pool deployed per market
