@@ -308,6 +308,8 @@ library PoolLibrary {
             IPoolManager(UNISWAP_V4).sync(poolKey.currency0);
             IPegToken(Currency.unwrap(poolKey.currency0)).mint(UNISWAP_V4, donateBalance);
             IPoolManager(UNISWAP_V4).settle();
+
+            self.cacheDonateBalance = 0;
         } else {
             self.cacheDonateBalance += donateBalance;
         }

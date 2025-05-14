@@ -175,14 +175,12 @@ contract Ampli is IAmpli, BaseHook {
         emit Borrow(id, positionId, receiver, borrowAsset, share);
     }
 
-    function repay(PoolKey memory key, uint256 positionId, BorrowShare share) external onlyWhenUnlocked {
+    function repay(PoolKey memory key, uint256 positionId, BorrowShare share) external  {
         PoolId id = key.toId();
         Pool storage pool = _pools[id];
 
         pool.checkPoolInitialized();
         uint256 repayAsset = pool.repay(key, positionId, share);
-
-        Locker.checkOutItems(id, positionId);
 
         emit Repay(id, positionId, repayAsset, share);
     }
@@ -198,6 +196,7 @@ contract Ampli is IAmpli, BaseHook {
 
         pool.checkPoolInitialized();
         address fungibleAddress = pool.withdrawFungibleCollateral(key, positionId, fungibleAssetId, amount);
+        Locker.checkOutItems(id, positionId);
 
         emit WithdrawFungibleCollateral(id, positionId, fungibleAddress, amount);
     }
@@ -212,12 +211,14 @@ contract Ampli is IAmpli, BaseHook {
 
         pool.checkPoolInitialized();
         pool.withdrawNonFungibleCollateral(key, positionId, nonFungibleAssetId);
+        Locker.checkOutItems(id, positionId);
 
         emit WithdrawNonFungibleCollateral(id, positionId, nonFungibleAssetId.nft(), nonFungibleAssetId.tokenId());
     }
 
     /* LIQUIDATION */
 
+    // TODO: Liquidate in unlock with checkout
     function liquidate(PoolKey memory key, uint256 positionId) external {
         PoolId id = key.toId();
         Pool storage pool = _pools[id];
