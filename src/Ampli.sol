@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
+import {BaseHook, Hooks, IPoolManager, BeforeSwapDelta, BalanceDelta} from "./BaseHook.sol";
 import {IAmpli} from "./interfaces/IAmpli.sol";
 import {IIrm} from "./interfaces/IIrm.sol";
 import {IOracle} from "./interfaces/IOracle.sol";
@@ -14,14 +15,20 @@ import {PoolId} from "v4-core/types/PoolId.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency} from "v4-core/types/Currency.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
+import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 
-contract Ampli is IAmpli {
+contract Ampli is IAmpli, BaseHook {
+    using StateLibrary for IPoolManager;
+
     mapping(PoolId id => Pool) internal _pools;
 
     modifier onlyWhenUnlocked() {
         require(Locker.isUnlocked(), ManagerLocked());
         _;
     }
+
+    //Hooks.Permissions(false, false, true, false, true, false, true, true, false, false, false, false, false, false)
+    constructor(IPoolManager manager) BaseHook(manager) {}
 
     function unlock(bytes calldata data) external returns (bytes memory result) {
         require(!Locker.isUnlocked(), AlreadyUnlocked());
@@ -209,5 +216,68 @@ contract Ampli is IAmpli {
         (uint256 repaidAsset, int256 bedDebtAsset) = pool.liquidate(key, positionId);
 
         emit Liquidate(id, positionId, repaidAsset, uint256(-bedDebtAsset));
+    }
+
+    /* HOOKS */
+    function beforeAddLiquidity(
+        address sender,
+        PoolKey calldata key,
+        IPoolManager.ModifyLiquidityParams calldata params,
+        bytes calldata /*hookData*/
+    ) external override onlyPoolManager returns (bytes4) {
+        if (sender != address(this)) {
+            PoolId id = key.toId();
+            (, int24 tick,,) = poolManager.getSlot0(id);
+
+            if (tick >= params.tickLower && tick < params.tickUpper) {
+                _pools[id].accrueInterest(key, true);
+            }
+        }
+
+        return this.beforeAddLiquidity.selector;
+    }
+
+    function beforeRemoveLiquidity(
+        address sender,
+        PoolKey calldata key,
+        IPoolManager.ModifyLiquidityParams calldata params,
+        bytes calldata /*hookData*/
+    ) external override onlyPoolManager returns (bytes4) {
+        if (sender != address(this)) {
+            PoolId id = key.toId();
+            (, int24 tick,,) = poolManager.getSlot0(id);
+
+            if (tick >= params.tickLower && tick < params.tickUpper) {
+                _pools[id].accrueInterest(key, false);
+            }
+        }
+
+        return this.beforeRemoveLiquidity.selector;
+    }
+
+    function beforeSwap(address sender, PoolKey calldata key, IPoolManager.SwapParams calldata, bytes calldata)
+        external
+        override
+        onlyPoolManager
+        returns (bytes4, BeforeSwapDelta, uint24)
+    {
+        if (sender != address(this)) {
+            PoolId id = key.toId();
+            _pools[id].accrueInterest(key, true);
+        }
+
+        return (this.beforeSwap.selector, BeforeSwapDelta.wrap(0), 0);
+    }
+
+    function afterSwap(
+        address sender,
+        PoolKey calldata key,
+        IPoolManager.SwapParams calldata params,
+        BalanceDelta delta,
+        bytes calldata /*hookData*/
+    ) external override onlyPoolManager returns (bytes4, int128) {
+        // TODO: send price to oracle
+        // TODO: if price > 1, swap peg token
+        return (this.afterSwap.selector, 0);
     }
 }

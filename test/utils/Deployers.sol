@@ -22,7 +22,7 @@ contract Deployers is Test {
     function deployAmpliWithActionRouter() public {
         // ampli = new Ampli();
         address mockAmpli = address(0xFb46d30c9B3ACc61d714D167179748FD01E09aC0);
-        deployCodeTo("Ampli.sol", mockAmpli);
+        deployCodeTo("Ampli.sol", abi.encode(address(0x498581fF718922c3f8e6A244956aF099B2652b2b)), mockAmpli);
         ampli = Ampli(mockAmpli);
         actionsRouter = new ActionsRouter(ampli);
     }

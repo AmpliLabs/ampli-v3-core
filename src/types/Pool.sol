@@ -28,6 +28,7 @@ struct Pool {
     int128 riskReverseFee;
     uint256 totalBorrowAssets;
     BorrowShare totalBorrowShares;
+    uint256 cacheDonateBalance;
     mapping(uint256 fungibleAssetId => FungibleAssetParams) fungibleAssetParams;
     mapping(address nft => bool isCollateral) isNFTCollateral;
     mapping(address nft => uint256 lltv) nonFungibleAssetParams;
@@ -136,7 +137,7 @@ library PoolLibrary {
 
         Position storage position = self.positions[positionId];
 
-        accrueInterest(self, poolKey);
+        accrueInterest(self, poolKey, false);
 
         position.addFungible(fungibleAssetId, amount);
 
@@ -155,7 +156,7 @@ library PoolLibrary {
 
         require(self.isNFTCollateral[nftAddress], InvaildNonFungibleAsset());
 
-        accrueInterest(self, poolKey);
+        accrueInterest(self, poolKey, false);
 
         position.addNonFungible(nonFungibleAssetId);
 
@@ -201,7 +202,7 @@ library PoolLibrary {
 
         Position storage position = self.positions[positionId];
 
-        accrueInterest(self, poolKey);
+        accrueInterest(self, poolKey, false);
 
         position.removeFungible(fungibleAssetId, amount);
 
@@ -218,7 +219,7 @@ library PoolLibrary {
         address nftAddress = nonFungibleAssetId.nft();
         uint256 tokenId = nonFungibleAssetId.tokenId();
 
-        accrueInterest(self, poolKey);
+        accrueInterest(self, poolKey, false);
 
         position.removeNonFungible(nonFungibleAssetId);
         nftAddress.safeTransfer(msg.sender, tokenId);
@@ -232,7 +233,7 @@ library PoolLibrary {
     {
         Position storage position = self.positions[positionId];
 
-        accrueInterest(self, poolKey);
+        accrueInterest(self, poolKey, false);
 
         // maxBorrow = collateral value, borrowed = borrow peg token value
         (bool health, uint256 maxBorrow, uint256 borrowed) = position.isHealthy(
@@ -273,7 +274,7 @@ library PoolLibrary {
     /* INTEREST MANAGEMENT */
 
     // TODO: if manager unlock, save interest. if manager is not unlock, donate interest
-    function accrueInterest(Pool storage self, PoolKey memory poolKey) internal {
+    function accrueInterest(Pool storage self, PoolKey memory poolKey, bool isHook) internal {
         uint256 elapsed = block.timestamp - self.lastUpdate;
         if (elapsed == 0) return;
 
@@ -295,10 +296,15 @@ library PoolLibrary {
 
         uint256 donateBalance = interest - allFee;
 
-        IPoolManager(UNISWAP_V4).donate(poolKey, 0, donateBalance, "");
-        IPoolManager(UNISWAP_V4).sync(poolKey.currency0);
-        IPegToken(Currency.unwrap(poolKey.currency0)).mint(UNISWAP_V4, donateBalance);
-        IPoolManager(UNISWAP_V4).settle();
+        if (isHook) {
+            donateBalance += self.cacheDonateBalance;
+            IPoolManager(UNISWAP_V4).donate(poolKey, 0, donateBalance, "");
+            IPoolManager(UNISWAP_V4).sync(poolKey.currency0);
+            IPegToken(Currency.unwrap(poolKey.currency0)).mint(UNISWAP_V4, donateBalance);
+            IPoolManager(UNISWAP_V4).settle();
+        } else {
+            self.cacheDonateBalance += donateBalance;
+        }
 
         self.lastUpdate = uint64(block.timestamp);
     }
