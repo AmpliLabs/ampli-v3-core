@@ -42,6 +42,7 @@ library PoolLibrary {
     using SafeCast for int256;
 
     error PoolAlreadyInitialized();
+    error PoolNotInitialized();
     error InvaildFungibleAsset();
     error InvaildNonFungibleAsset();
 
@@ -77,6 +78,10 @@ library PoolLibrary {
         self.fungibleAssetParams[1] = FungibleAssetParams({asset: Currency.unwrap(poolKey.currency0), lltv: 0.99e6});
 
         self.reservesCount = 2;
+    }
+
+    function checkPoolInitialized(Pool storage self) internal view {
+        require(self.reservesCount > 0, PoolNotInitialized());
     }
 
     function onlyOwner(Pool storage self) internal view {
@@ -267,6 +272,7 @@ library PoolLibrary {
 
     /* INTEREST MANAGEMENT */
 
+    // TODO: if manager unlock, save interest. if manager is not unlock, donate interest
     function accrueInterest(Pool storage self, PoolKey memory poolKey) internal {
         uint256 elapsed = block.timestamp - self.lastUpdate;
         if (elapsed == 0) return;

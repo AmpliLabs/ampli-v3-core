@@ -121,7 +121,10 @@ contract Ampli is IAmpli {
         external
     {
         PoolId id = key.toId();
-        address fungibleAddress = _pools[id].supplyFungibleCollateral(key, positionId, fungibleAssetId, amount);
+        Pool storage pool = _pools[id];
+
+        pool.checkPoolInitialized();
+        address fungibleAddress = pool.supplyFungibleCollateral(key, positionId, fungibleAssetId, amount);
 
         emit SupplyFungibleCollateral(id, positionId, fungibleAddress, amount);
     }
@@ -130,7 +133,10 @@ contract Ampli is IAmpli {
         external
     {
         PoolId id = key.toId();
-        _pools[id].supplyNonFungibleCollateral(key, positionId, nonFungibleAssetId);
+        Pool storage pool = _pools[id];
+
+        pool.checkPoolInitialized();
+        pool.supplyNonFungibleCollateral(key, positionId, nonFungibleAssetId);
 
         emit SuppluNonFungibleCollateral(id, positionId, nonFungibleAssetId.nft(), nonFungibleAssetId.tokenId());
     }
@@ -142,7 +148,10 @@ contract Ampli is IAmpli {
         onlyWhenUnlocked
     {
         PoolId id = key.toId();
-        uint256 borrowAsset = _pools[id].borrow(key, receiver, positionId, share);
+        Pool storage pool = _pools[id];
+
+        pool.checkPoolInitialized();
+        uint256 borrowAsset = pool.borrow(key, receiver, positionId, share);
 
         Locker.checkOutItems(id, positionId);
 
@@ -151,7 +160,10 @@ contract Ampli is IAmpli {
 
     function repay(PoolKey memory key, uint256 positionId, BorrowShare share) external onlyWhenUnlocked {
         PoolId id = key.toId();
-        uint256 repayAsset = _pools[id].repay(key, positionId, share);
+        Pool storage pool = _pools[id];
+
+        pool.checkPoolInitialized();
+        uint256 repayAsset = pool.repay(key, positionId, share);
 
         Locker.checkOutItems(id, positionId);
 
@@ -165,7 +177,10 @@ contract Ampli is IAmpli {
         onlyWhenUnlocked
     {
         PoolId id = key.toId();
-        address fungibleAddress = _pools[id].withdrawFungibleCollateral(key, positionId, fungibleAssetId, amount);
+        Pool storage pool = _pools[id];
+
+        pool.checkPoolInitialized();
+        address fungibleAddress = pool.withdrawFungibleCollateral(key, positionId, fungibleAssetId, amount);
 
         emit WithdrawFungibleCollateral(id, positionId, fungibleAddress, amount);
     }
@@ -176,7 +191,10 @@ contract Ampli is IAmpli {
         NonFungibleAssetId nonFungibleAssetId
     ) external onlyWhenUnlocked {
         PoolId id = key.toId();
-        _pools[id].withdrawNonFungibleCollateral(key, positionId, nonFungibleAssetId);
+        Pool storage pool = _pools[id];
+
+        pool.checkPoolInitialized();
+        pool.withdrawNonFungibleCollateral(key, positionId, nonFungibleAssetId);
 
         emit WithdrawNonFungibleCollateral(id, positionId, nonFungibleAssetId.nft(), nonFungibleAssetId.tokenId());
     }
@@ -185,7 +203,10 @@ contract Ampli is IAmpli {
 
     function liquidate(PoolKey memory key, uint256 positionId) external {
         PoolId id = key.toId();
-        (uint256 repaidAsset, int256 bedDebtAsset) = _pools[id].liquidate(key, positionId);
+        Pool storage pool = _pools[id];
+
+        pool.checkPoolInitialized();
+        (uint256 repaidAsset, int256 bedDebtAsset) = pool.liquidate(key, positionId);
 
         emit Liquidate(id, positionId, repaidAsset, uint256(-bedDebtAsset));
     }
