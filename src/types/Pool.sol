@@ -170,6 +170,8 @@ library PoolLibrary {
         returns (uint256 borrowAsset)
     {
         Position storage position = self.positions[positionId];
+        position.checkSenderAuthorized();
+
         position.borrow(share);
 
         borrowAsset = share.toAssetsDown(self.totalBorrowAssets, self.totalBorrowShares);
@@ -201,6 +203,7 @@ library PoolLibrary {
         require(fungibleAddress != address(0), InvaildFungibleAsset());
 
         Position storage position = self.positions[positionId];
+        position.checkSenderAuthorized();
 
         accrueInterest(self, poolKey, false);
 
@@ -216,6 +219,8 @@ library PoolLibrary {
         NonFungibleAssetId nonFungibleAssetId
     ) internal {
         Position storage position = self.positions[positionId];
+        position.checkSenderAuthorized();
+
         address nftAddress = nonFungibleAssetId.nft();
         uint256 tokenId = nonFungibleAssetId.tokenId();
 
@@ -268,6 +273,7 @@ library PoolLibrary {
         }
 
         position.owner = msg.sender;
+        position.authorizedOperator = address(0);
         position.borrowShares = BorrowShare.wrap(0);
     }
 
@@ -325,5 +331,19 @@ library PoolLibrary {
         );
 
         require(health, PositionIsNotHealthy());
+    }
+
+    function updatePositionAuthorization(
+        Pool storage self,
+        uint256 positionId,
+        address owner,
+        address authorizedOperator
+    ) internal {
+        Position storage position = self.positions[positionId];
+        if (position.owner != address(0)) {
+            position.checkSenderAuthorized();
+        }
+        position.owner = owner;
+        position.authorizedOperator = authorizedOperator;
     }
 }

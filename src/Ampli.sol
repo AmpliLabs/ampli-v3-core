@@ -122,6 +122,16 @@ contract Ampli is IAmpli, BaseHook {
         emit SetFee(id, feeRatio, ownerFeeRatio);
     }
 
+    /* POSITION MANAGEMENT */
+
+    function updateAuthorization(PoolKey memory key, uint256 positionId, address owner, address authorizedOperator)
+        external
+    {
+        PoolId id = key.toId();
+        Pool storage pool = _pools[id];
+        pool.updatePositionAuthorization(positionId, owner, authorizedOperator);
+    }
+
     /* SUPPLY MANAGEMENT */
 
     function supplyFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
@@ -270,12 +280,12 @@ contract Ampli is IAmpli, BaseHook {
     }
 
     function afterSwap(
-        address sender,
-        PoolKey calldata key,
-        IPoolManager.SwapParams calldata params,
-        BalanceDelta delta,
+        address, /*sender*/
+        PoolKey calldata, /*key*/
+        IPoolManager.SwapParams calldata, /*params*/
+        BalanceDelta, /*delta*/
         bytes calldata /*hookData*/
-    ) external override onlyPoolManager returns (bytes4, int128) {
+    ) external view override onlyPoolManager returns (bytes4, int128) {
         // TODO: send price to oracle
         // TODO: if price > 1, swap peg token
         return (this.afterSwap.selector, 0);
