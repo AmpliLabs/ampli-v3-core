@@ -175,7 +175,7 @@ contract Ampli is IAmpli, BaseHook {
         emit Borrow(id, positionId, receiver, borrowAsset, share);
     }
 
-    function repay(PoolKey memory key, uint256 positionId, BorrowShare share) external  {
+    function repay(PoolKey memory key, uint256 positionId, BorrowShare share) external {
         PoolId id = key.toId();
         Pool storage pool = _pools[id];
 

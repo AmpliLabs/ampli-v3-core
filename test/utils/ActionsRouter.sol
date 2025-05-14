@@ -87,9 +87,9 @@ contract ActionsRouter is IUnlockCallback {
     }
 
     function _borrow(bytes memory params) internal {
-        (PoolKey memory key, uint256 positionId, address receiver, BorrowShare share) =
-            abi.decode(params, (PoolKey, uint256, address, BorrowShare));
+        (PoolKey memory key, uint256 positionId, BorrowShare share) =
+            abi.decode(params, (PoolKey, uint256, BorrowShare));
 
-        ampli.borrow(key, positionId, receiver, share);
+        ampli.borrow(key, positionId, address(this), share);
     }
 }

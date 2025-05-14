@@ -15,7 +15,6 @@ contract Deployers is Test {
     ActionsRouter public actionsRouter;
     IPoolManager public manager;
     TestERC20 public tokenMock;
-    PegToken public pegToken;
     IrmMock public irm;
     OracleMock public oracle;
 
