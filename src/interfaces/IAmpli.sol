@@ -47,4 +47,7 @@ interface IAmpli {
         external;
     function supplyNonFungibleCollateral(PoolKey memory key, uint256 positionId, NonFungibleAssetId nonFungibleAssetId)
         external;
+    function withdrawFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
+        external;
+    function borrow(PoolKey memory key, uint256 positionId, address receiver, BorrowShare share) external;
 }
