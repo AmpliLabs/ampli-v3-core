@@ -27,7 +27,10 @@ contract Deployers is Test {
         vm.label(mockAmpli, "Ampli");
         deployCodeTo("Ampli.sol", abi.encode(address(0x498581fF718922c3f8e6A244956aF099B2652b2b)), mockAmpli);
         ampli = Ampli(mockAmpli);
-        actionsRouter = new ActionsRouter(ampli);
+
+        v4MiniRouter = new V4MiniRouter(address(manager));
+        v4RouterHelper = new V4RouterHelper(v4MiniRouter);
+        actionsRouter = new ActionsRouter(ampli, v4RouterHelper);
     }
 
     function deployFreshManager() public {
@@ -42,10 +45,5 @@ contract Deployers is Test {
     function deployIrmAndOracle() public {
         irm = new IrmMock();
         oracle = new OracleMock();
-    }
-
-    function deployV4MiniRouter() public {
-        v4MiniRouter = new V4MiniRouter(address(manager));
-        v4RouterHelper = new V4RouterHelper(v4MiniRouter);
     }
 }

@@ -8,6 +8,7 @@ import {NonFungibleAssetId} from "src/types/NonFungibleAssetId.sol";
 import {BorrowShare} from "src/types/BorrowShare.sol";
 import {Currency} from "v4-core/types/Currency.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
+import {V4RouterHelper} from "./V4RouterHelper.sol";
 
 enum Actions {
     TRANSFER_IN_FUNGIBLE_ASSET,
@@ -16,14 +17,17 @@ enum Actions {
     SUPPLY_NON_FUNGIBLE_COLLATERAL,
     WITHDRAW_FUNGIBLE_COLLATERAL,
     WITHDRAW_NON_FUNGIBLE_COLLATERAL,
-    BORROW
+    BORROW,
+    V4_SWAP
 }
 
 contract ActionsRouter is IUnlockCallback {
     IAmpli public ampli;
+    V4RouterHelper public v4RouterHelper;
 
-    constructor(IAmpli _ampli) {
+    constructor(IAmpli _ampli, V4RouterHelper _v4RouterHelper) {
         ampli = _ampli;
+        v4RouterHelper = _v4RouterHelper;
     }
 
     function approve(address token) external {
@@ -52,6 +56,8 @@ contract ActionsRouter is IUnlockCallback {
                 _withdrawFungibleCollateral(param);
             } else if (action == Actions.BORROW) {
                 _borrow(param);
+            } else if (action == Actions.V4_SWAP) {
+                _swap(param);
             }
         }
         return "";
@@ -70,6 +76,12 @@ contract ActionsRouter is IUnlockCallback {
     function _supplyFungibleCollateral(bytes memory params) internal {
         (PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount) =
             abi.decode(params, (PoolKey, uint256, uint256, uint256));
+        
+        if (fungibleAssetId == 0 && amount == 0) {
+            amount = IERC20(Currency.unwrap(key.currency1)).balanceOf(address(this));
+        } else if (fungibleAssetId == 1 && amount == 0) {
+            amount = IERC20(Currency.unwrap(key.currency0)).balanceOf(address(this));
+        }
 
         ampli.supplyFungibleCollateral(key, positionId, fungibleAssetId, amount);
     }
@@ -91,5 +103,11 @@ contract ActionsRouter is IUnlockCallback {
             abi.decode(params, (PoolKey, uint256, BorrowShare));
 
         ampli.borrow(key, positionId, address(this), share);
+    }
+
+    function _swap(bytes memory params) internal {
+        // Only Support peg token -> underlying
+        (PoolKey memory key, int256 amountSpecified) = abi.decode(params, (PoolKey, int256));
+        v4RouterHelper.swap(address(this), key, amountSpecified);
     }
 }

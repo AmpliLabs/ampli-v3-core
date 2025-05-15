@@ -22,7 +22,6 @@ contract PoolTest is Test, Deployers {
     function setUp() public {
         vm.createSelectFork("Base", 30177975);
         deployFreshManager();
-        deployV4MiniRouter();
         deployAmpliWithActionRouter();
         deployMockERC20();
         deployIrmAndOracle();
