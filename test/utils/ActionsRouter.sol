@@ -25,7 +25,6 @@ contract ActionsRouter is IUnlockCallback {
     IAmpli public ampli;
     V4RouterHelper public v4RouterHelper;
 
-
     constructor(IAmpli _ampli, V4RouterHelper _v4RouterHelper) {
         ampli = _ampli;
         v4RouterHelper = _v4RouterHelper;

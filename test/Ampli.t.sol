@@ -132,9 +132,9 @@ contract AmpliTest is Test, Deployers {
         tokenMock.mint(user, 1 ether);
         tokenMock.approve(address(ampli), type(uint256).max);
         ampli.supplyFungibleCollateral(poolKey, 2, 0, 0.5 ether);
-        
+
         (uint256 totalBorrow, BorrowShare totalShare) = IAmpli(address(ampli)).getPoolBorrow(poolKey.toId());
-        
+
         BorrowShare borrowed = BorrowShareLibrary.toSharesDown(5 ether, totalBorrow, totalShare);
 
         Actions[] memory actions = new Actions[](3);
@@ -145,7 +145,7 @@ contract AmpliTest is Test, Deployers {
 
         actions[1] = Actions.V4_SWAP;
         params[1] = abi.encode(poolKey, -5 ether);
-        
+
         actions[2] = Actions.SUPPLY_FUNGIBLE_COLLATERAL;
         params[2] = abi.encode(poolKey, 2, 0, 0);
 

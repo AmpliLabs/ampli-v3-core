@@ -193,7 +193,7 @@ library PoolLibrary {
 
         self.totalBorrowAssets -= repayAsset;
         self.totalBorrowShares = self.totalBorrowShares - share;
-        
+
         IPegToken(Currency.unwrap(poolKey.currency0)).burn(msg.sender, repayAsset);
     }
 
