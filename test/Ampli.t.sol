@@ -5,7 +5,8 @@ import {Test, console} from "forge-std/Test.sol";
 import {Deployers} from "./utils/Deployers.sol";
 import {Actions} from "./utils/ActionsRouter.sol";
 import {V4Actions} from "./utils/V4MiniRouter.sol";
-import {Pool} from "src/types/Pool.sol";
+import {IAmpli} from "src/interfaces/IAmpli.sol";
+import {StateLibrary} from "src/libraries/StateLibrary.sol";
 import {BorrowShare, BorrowShareLibrary} from "src/types/BorrowShare.sol";
 import {Currency} from "v4-core/types/Currency.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
@@ -14,8 +15,9 @@ import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 
-contract PoolTest is Test, Deployers {
-    Pool public pool;
+contract AmpliTest is Test, Deployers {
+    using StateLibrary for IAmpli;
+
     PoolKey public poolKey;
     IERC20 public pegToken;
 
@@ -35,12 +37,16 @@ contract PoolTest is Test, Deployers {
         });
 
         pegToken = IERC20(address(0xA19570ac9E7bB35eAABe7a2e97B2941c200b3667));
-        actionsRouter.approve(address(tokenMock));
+
         ampli.initialize(address(tokenMock), address(this), irm, oracle, 2, 1, hex"ff");
+
+        actionsRouter.approve(address(tokenMock));
+        actionsRouter.approve(address(pegToken));
 
         irm.setBorrowRate(0.01 * 1e27);
         // assetId = 0, mock token price / peg token = 1
         oracle.setFungibleAssetPrice(0, 1e36);
+        oracle.setFungibleAssetPrice(1, 1e36);
 
         // Approve
         tokenMock.approve(address(ampli), type(uint256).max);
@@ -113,12 +119,37 @@ contract PoolTest is Test, Deployers {
         actionsRouter.executeActions(actions, params);
     }
 
-    function test_swap() public {
+    function test_borrowAndSupply() public {
         tokenMock.mint(address(this), 1500 ether);
         _supplyMaxFungibleCollateral(1000 ether);
         _borrowPegToken(600 ether);
         v4RouterHelper.addLiquidity(address(this), poolKey);
 
-        v4RouterHelper.swap(address(this), poolKey, 10 ether);
+        address user = makeAddr("user");
+        vm.startPrank(user);
+        ampli.updateAuthorization(poolKey, 2, user, address(actionsRouter));
+
+        tokenMock.mint(user, 1 ether);
+        tokenMock.approve(address(ampli), type(uint256).max);
+        ampli.supplyFungibleCollateral(poolKey, 2, 0, 0.5 ether);
+        
+        (uint256 totalBorrow, BorrowShare totalShare) = IAmpli(address(ampli)).getPoolBorrow(poolKey.toId());
+        
+        BorrowShare borrowed = BorrowShareLibrary.toSharesDown(5 ether, totalBorrow, totalShare);
+
+        Actions[] memory actions = new Actions[](3);
+        bytes[] memory params = new bytes[](3);
+
+        actions[0] = Actions.BORROW;
+        params[0] = abi.encode(poolKey, 2, borrowed);
+
+        actions[1] = Actions.V4_SWAP;
+        params[1] = abi.encode(poolKey, -5 ether);
+        
+        actions[2] = Actions.SUPPLY_FUNGIBLE_COLLATERAL;
+        params[2] = abi.encode(poolKey, 2, 0, 0);
+
+        actionsRouter.executeActions(actions, params);
+        vm.stopPrank();
     }
 }

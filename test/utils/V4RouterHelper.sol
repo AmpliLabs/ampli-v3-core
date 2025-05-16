@@ -7,7 +7,7 @@ import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {V4MiniRouter, V4Actions} from "./V4MiniRouter.sol";
 
 contract V4RouterHelper {
-    V4MiniRouter router;
+    V4MiniRouter public router;
 
     constructor(V4MiniRouter _router) {
         router = _router;

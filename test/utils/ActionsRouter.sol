@@ -25,6 +25,7 @@ contract ActionsRouter is IUnlockCallback {
     IAmpli public ampli;
     V4RouterHelper public v4RouterHelper;
 
+
     constructor(IAmpli _ampli, V4RouterHelper _v4RouterHelper) {
         ampli = _ampli;
         v4RouterHelper = _v4RouterHelper;
@@ -32,6 +33,7 @@ contract ActionsRouter is IUnlockCallback {
 
     function approve(address token) external {
         IERC20(token).approve(address(ampli), type(uint256).max);
+        IERC20(token).approve(address(v4RouterHelper.router()), type(uint256).max);
     }
 
     function executeActions(Actions[] memory actions, bytes[] memory params) external payable {
@@ -76,7 +78,7 @@ contract ActionsRouter is IUnlockCallback {
     function _supplyFungibleCollateral(bytes memory params) internal {
         (PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount) =
             abi.decode(params, (PoolKey, uint256, uint256, uint256));
-        
+
         if (fungibleAssetId == 0 && amount == 0) {
             amount = IERC20(Currency.unwrap(key.currency1)).balanceOf(address(this));
         } else if (fungibleAssetId == 1 && amount == 0) {
