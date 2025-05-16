@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
+import {BaseHook, Hooks, IPoolManager, BeforeSwapDelta, BalanceDelta} from "./BaseHook.sol";
+import {Extsload} from "./Extsload.sol";
 import {IAmpli} from "./interfaces/IAmpli.sol";
 import {IIrm} from "./interfaces/IIrm.sol";
 import {IOracle} from "./interfaces/IOracle.sol";
@@ -14,14 +16,20 @@ import {PoolId} from "v4-core/types/PoolId.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency} from "v4-core/types/Currency.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
+import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 
-contract Ampli is IAmpli {
+contract Ampli is IAmpli, BaseHook, Extsload {
+    using StateLibrary for IPoolManager;
+
     mapping(PoolId id => Pool) internal _pools;
 
     modifier onlyWhenUnlocked() {
         require(Locker.isUnlocked(), ManagerLocked());
         _;
     }
+
+    //Hooks.Permissions(false, false, true, false, true, false, true, true, false, false, false, false, false, false)
+    constructor(IPoolManager manager) BaseHook(manager) {}
 
     function unlock(bytes calldata data) external returns (bytes memory result) {
         require(!Locker.isUnlocked(), AlreadyUnlocked());
@@ -50,7 +58,7 @@ contract Ampli is IAmpli {
         require(feeRatio < 100, InvaildFeeRatio());
 
         address pegToken = address(new PegToken{salt: salt}(underlying, address(this)));
-        require(underlying < pegToken, InvaildPegTokenSalt());
+        require(pegToken < underlying, InvaildPegTokenSalt());
 
         PoolKey memory key = PoolKey({
             currency0: Currency.wrap(pegToken),
@@ -115,24 +123,38 @@ contract Ampli is IAmpli {
         emit SetFee(id, feeRatio, ownerFeeRatio);
     }
 
+    /* POSITION MANAGEMENT */
+
+    function updateAuthorization(PoolKey memory key, uint256 positionId, address owner, address authorizedOperator)
+        external
+    {
+        PoolId id = key.toId();
+        Pool storage pool = _pools[id];
+        pool.updatePositionAuthorization(positionId, owner, authorizedOperator);
+    }
+
     /* SUPPLY MANAGEMENT */
 
     function supplyFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
         external
-        onlyWhenUnlocked
     {
         PoolId id = key.toId();
-        address fungibleAddress = _pools[id].supplyFungibleCollateral(key, positionId, fungibleAssetId, amount);
+        Pool storage pool = _pools[id];
+
+        pool.checkPoolInitialized();
+        address fungibleAddress = pool.supplyFungibleCollateral(key, positionId, fungibleAssetId, amount);
 
         emit SupplyFungibleCollateral(id, positionId, fungibleAddress, amount);
     }
 
     function supplyNonFungibleCollateral(PoolKey memory key, uint256 positionId, NonFungibleAssetId nonFungibleAssetId)
         external
-        onlyWhenUnlocked
     {
         PoolId id = key.toId();
-        _pools[id].supplyNonFungibleCollateral(key, positionId, nonFungibleAssetId);
+        Pool storage pool = _pools[id];
+
+        pool.checkPoolInitialized();
+        pool.supplyNonFungibleCollateral(key, positionId, nonFungibleAssetId);
 
         emit SuppluNonFungibleCollateral(id, positionId, nonFungibleAssetId.nft(), nonFungibleAssetId.tokenId());
     }
@@ -144,18 +166,22 @@ contract Ampli is IAmpli {
         onlyWhenUnlocked
     {
         PoolId id = key.toId();
-        uint256 borrowAsset = _pools[id].borrow(key, receiver, positionId, share);
+        Pool storage pool = _pools[id];
 
-        // TODO: checkout in lock
+        pool.checkPoolInitialized();
+        uint256 borrowAsset = pool.borrow(key, receiver, positionId, share);
+
+        Locker.checkOutItems(id, positionId);
 
         emit Borrow(id, positionId, receiver, borrowAsset, share);
     }
 
-    function repay(PoolKey memory key, uint256 positionId, BorrowShare share) external onlyWhenUnlocked {
+    function repay(PoolKey memory key, uint256 positionId, BorrowShare share) external {
         PoolId id = key.toId();
-        uint256 repayAsset = _pools[id].repay(key, positionId, share);
-        
-        // TODO: checkout in lock
+        Pool storage pool = _pools[id];
+
+        pool.checkPoolInitialized();
+        uint256 repayAsset = pool.repay(key, positionId, share);
 
         emit Repay(id, positionId, repayAsset, share);
     }
@@ -167,7 +193,11 @@ contract Ampli is IAmpli {
         onlyWhenUnlocked
     {
         PoolId id = key.toId();
-        address fungibleAddress = _pools[id].withdrawFungibleCollateral(key, positionId, fungibleAssetId, amount);
+        Pool storage pool = _pools[id];
+
+        pool.checkPoolInitialized();
+        address fungibleAddress = pool.withdrawFungibleCollateral(key, positionId, fungibleAssetId, amount);
+        Locker.checkOutItems(id, positionId);
 
         emit WithdrawFungibleCollateral(id, positionId, fungibleAddress, amount);
     }
@@ -178,17 +208,88 @@ contract Ampli is IAmpli {
         NonFungibleAssetId nonFungibleAssetId
     ) external onlyWhenUnlocked {
         PoolId id = key.toId();
-        _pools[id].withdrawNonFungibleCollateral(key, positionId, nonFungibleAssetId);
+        Pool storage pool = _pools[id];
+
+        pool.checkPoolInitialized();
+        pool.withdrawNonFungibleCollateral(key, positionId, nonFungibleAssetId);
+        Locker.checkOutItems(id, positionId);
 
         emit WithdrawNonFungibleCollateral(id, positionId, nonFungibleAssetId.nft(), nonFungibleAssetId.tokenId());
     }
 
     /* LIQUIDATION */
 
+    // TODO: Liquidate in unlock with checkout
     function liquidate(PoolKey memory key, uint256 positionId) external {
         PoolId id = key.toId();
-        (uint256 repaidAsset, int256 bedDebtAsset) = _pools[id].liquidate(key, positionId);
+        Pool storage pool = _pools[id];
+
+        pool.checkPoolInitialized();
+        (uint256 repaidAsset, int256 bedDebtAsset) = pool.liquidate(key, positionId);
 
         emit Liquidate(id, positionId, repaidAsset, uint256(-bedDebtAsset));
+    }
+
+    /* HOOKS */
+    function beforeAddLiquidity(
+        address sender,
+        PoolKey calldata key,
+        IPoolManager.ModifyLiquidityParams calldata params,
+        bytes calldata /*hookData*/
+    ) external override onlyPoolManager returns (bytes4) {
+        if (sender != address(this)) {
+            PoolId id = key.toId();
+            (, int24 tick,,) = poolManager.getSlot0(id);
+
+            if (tick >= params.tickLower && tick < params.tickUpper) {
+                _pools[id].accrueInterest(key, true);
+            }
+        }
+
+        return this.beforeAddLiquidity.selector;
+    }
+
+    function beforeRemoveLiquidity(
+        address sender,
+        PoolKey calldata key,
+        IPoolManager.ModifyLiquidityParams calldata params,
+        bytes calldata /*hookData*/
+    ) external override onlyPoolManager returns (bytes4) {
+        if (sender != address(this)) {
+            PoolId id = key.toId();
+            (, int24 tick,,) = poolManager.getSlot0(id);
+
+            if (tick >= params.tickLower && tick < params.tickUpper) {
+                _pools[id].accrueInterest(key, false);
+            }
+        }
+
+        return this.beforeRemoveLiquidity.selector;
+    }
+
+    function beforeSwap(address sender, PoolKey calldata key, IPoolManager.SwapParams calldata, bytes calldata)
+        external
+        override
+        onlyPoolManager
+        returns (bytes4, BeforeSwapDelta, uint24)
+    {
+        if (sender != address(this)) {
+            PoolId id = key.toId();
+            _pools[id].accrueInterest(key, true);
+        }
+
+        return (this.beforeSwap.selector, BeforeSwapDelta.wrap(0), 0);
+    }
+
+    function afterSwap(
+        address, /*sender*/
+        PoolKey calldata, /*key*/
+        IPoolManager.SwapParams calldata, /*params*/
+        BalanceDelta, /*delta*/
+        bytes calldata /*hookData*/
+    ) external view override onlyPoolManager returns (bytes4, int128) {
+        // TODO: send price to oracle
+        // TODO: if price > 1, swap peg token
+        return (this.afterSwap.selector, 0);
     }
 }

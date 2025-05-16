@@ -6,9 +6,13 @@ remappings = [
     "forge-std/=dependencies/forge-std-1.9.7/src/",
     "v4-core/=dependencies/uniswap-v4-core-4/src/",
 ]
+always_use_create_2_factory = true
 
 [dependencies]
 forge-std = "1.9.7"
 uniswap-v4-core = "4"
+
+[rpc_endpoints]
+Base = "${BASE_RPC_URL}"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

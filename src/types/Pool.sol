@@ -28,6 +28,7 @@ struct Pool {
     int128 riskReverseFee;
     uint256 totalBorrowAssets;
     BorrowShare totalBorrowShares;
+    uint256 cacheDonateBalance;
     mapping(uint256 fungibleAssetId => FungibleAssetParams) fungibleAssetParams;
     mapping(address nft => bool isCollateral) isNFTCollateral;
     mapping(address nft => uint256 lltv) nonFungibleAssetParams;
@@ -41,6 +42,8 @@ library PoolLibrary {
     using SafeCast for uint256;
     using SafeCast for int256;
 
+    error PoolAlreadyInitialized();
+    error PoolNotInitialized();
     error InvaildFungibleAsset();
     error InvaildNonFungibleAsset();
 
@@ -49,7 +52,7 @@ library PoolLibrary {
     error OnlyOwner();
 
     uint256 constant MIN_LIQUIDATION_INCENTIVE_FACTOR = 0.99e18;
-    address constant UNISWAP_V4 = 0x000000000004444c5dc75cB358380D2e3dE08A90;
+    address constant UNISWAP_V4 = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     uint160 constant INIT_PRICE = 0x1000000000000000000000000;
 
     function initialize(
@@ -61,6 +64,7 @@ library PoolLibrary {
         uint8 feeRatio,
         uint8 ownerFeeRatio
     ) internal {
+        require(self.reservesCount == 0, PoolAlreadyInitialized());
         IPoolManager(UNISWAP_V4).initialize(poolKey, INIT_PRICE);
 
         self.irm = irm;
@@ -69,10 +73,16 @@ library PoolLibrary {
         self.feeRatio = feeRatio;
         self.ownerFeeRatio = ownerFeeRatio;
 
+        // underlyingToken
         self.fungibleAssetParams[0] = FungibleAssetParams({asset: Currency.unwrap(poolKey.currency1), lltv: 1e6});
+        // pegToken
         self.fungibleAssetParams[1] = FungibleAssetParams({asset: Currency.unwrap(poolKey.currency0), lltv: 0.99e6});
 
         self.reservesCount = 2;
+    }
+
+    function checkPoolInitialized(Pool storage self) internal view {
+        require(self.reservesCount > 0, PoolNotInitialized());
     }
 
     function onlyOwner(Pool storage self) internal view {
@@ -127,7 +137,7 @@ library PoolLibrary {
 
         Position storage position = self.positions[positionId];
 
-        accrueInterest(self, poolKey);
+        accrueInterest(self, poolKey, false);
 
         position.addFungible(fungibleAssetId, amount);
 
@@ -146,7 +156,7 @@ library PoolLibrary {
 
         require(self.isNFTCollateral[nftAddress], InvaildNonFungibleAsset());
 
-        accrueInterest(self, poolKey);
+        accrueInterest(self, poolKey, false);
 
         position.addNonFungible(nonFungibleAssetId);
 
@@ -160,9 +170,15 @@ library PoolLibrary {
         returns (uint256 borrowAsset)
     {
         Position storage position = self.positions[positionId];
+        position.checkSenderAuthorized();
+
         position.borrow(share);
 
         borrowAsset = share.toAssetsDown(self.totalBorrowAssets, self.totalBorrowShares);
+
+        self.totalBorrowAssets += borrowAsset;
+        self.totalBorrowShares = self.totalBorrowShares + share;
+
         IPegToken(Currency.unwrap(poolKey.currency0)).mint(receiver, borrowAsset);
     }
 
@@ -174,6 +190,10 @@ library PoolLibrary {
         position.repay(share);
 
         repayAsset = share.toAssetsUp(self.totalBorrowAssets, self.totalBorrowShares);
+
+        self.totalBorrowAssets -= repayAsset;
+        self.totalBorrowShares = self.totalBorrowShares - share;
+
         IPegToken(Currency.unwrap(poolKey.currency0)).burn(msg.sender, repayAsset);
     }
 
@@ -191,8 +211,9 @@ library PoolLibrary {
         require(fungibleAddress != address(0), InvaildFungibleAsset());
 
         Position storage position = self.positions[positionId];
+        position.checkSenderAuthorized();
 
-        accrueInterest(self, poolKey);
+        accrueInterest(self, poolKey, false);
 
         position.removeFungible(fungibleAssetId, amount);
 
@@ -206,10 +227,12 @@ library PoolLibrary {
         NonFungibleAssetId nonFungibleAssetId
     ) internal {
         Position storage position = self.positions[positionId];
+        position.checkSenderAuthorized();
+
         address nftAddress = nonFungibleAssetId.nft();
         uint256 tokenId = nonFungibleAssetId.tokenId();
 
-        accrueInterest(self, poolKey);
+        accrueInterest(self, poolKey, false);
 
         position.removeNonFungible(nonFungibleAssetId);
         nftAddress.safeTransfer(msg.sender, tokenId);
@@ -223,7 +246,7 @@ library PoolLibrary {
     {
         Position storage position = self.positions[positionId];
 
-        accrueInterest(self, poolKey);
+        accrueInterest(self, poolKey, false);
 
         // maxBorrow = collateral value, borrowed = borrow peg token value
         (bool health, uint256 maxBorrow, uint256 borrowed) = position.isHealthy(
@@ -258,12 +281,14 @@ library PoolLibrary {
         }
 
         position.owner = msg.sender;
+        position.authorizedOperator = address(0);
         position.borrowShares = BorrowShare.wrap(0);
     }
 
     /* INTEREST MANAGEMENT */
 
-    function accrueInterest(Pool storage self, PoolKey memory poolKey) internal {
+    // TODO: if manager unlock, save interest. if manager is not unlock, donate interest
+    function accrueInterest(Pool storage self, PoolKey memory poolKey, bool isHook) internal {
         uint256 elapsed = block.timestamp - self.lastUpdate;
         if (elapsed == 0) return;
 
@@ -285,10 +310,17 @@ library PoolLibrary {
 
         uint256 donateBalance = interest - allFee;
 
-        IPoolManager(UNISWAP_V4).donate(poolKey, 0, donateBalance, "");
-        IPoolManager(UNISWAP_V4).sync(poolKey.currency0);
-        IPegToken(Currency.unwrap(poolKey.currency0)).mint(UNISWAP_V4, donateBalance);
-        IPoolManager(UNISWAP_V4).settle();
+        if (isHook) {
+            donateBalance += self.cacheDonateBalance;
+            IPoolManager(UNISWAP_V4).donate(poolKey, 0, donateBalance, "");
+            IPoolManager(UNISWAP_V4).sync(poolKey.currency0);
+            IPegToken(Currency.unwrap(poolKey.currency0)).mint(UNISWAP_V4, donateBalance);
+            IPoolManager(UNISWAP_V4).settle();
+
+            self.cacheDonateBalance = 0;
+        } else {
+            self.cacheDonateBalance += donateBalance;
+        }
 
         self.lastUpdate = uint64(block.timestamp);
     }
@@ -309,5 +341,19 @@ library PoolLibrary {
         );
 
         require(health, PositionIsNotHealthy());
+    }
+
+    function updatePositionAuthorization(
+        Pool storage self,
+        uint256 positionId,
+        address owner,
+        address authorizedOperator
+    ) internal {
+        Position storage position = self.positions[positionId];
+        if (position.owner != address(0)) {
+            position.checkSenderAuthorized();
+        }
+        position.owner = owner;
+        position.authorizedOperator = authorizedOperator;
     }
 }

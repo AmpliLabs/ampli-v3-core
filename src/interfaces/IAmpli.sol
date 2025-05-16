@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0;
 
+import {IExtsload} from "./IExtsload.sol";
 import {NonFungibleAssetId} from "../types/NonFungibleAssetId.sol";
 import {BorrowShare} from "../types/BorrowShare.sol";
 import {IIrm} from "../interfaces/IIrm.sol";
 import {IOracle} from "../interfaces/IOracle.sol";
 import {PoolId} from "v4-core/types/PoolId.sol";
+import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency} from "v4-core/types/Currency.sol";
 
-interface IAmpli {
+interface IAmpli is IExtsload {
     error ManagerLocked();
     error AlreadyUnlocked();
     error InvaildOwner();
@@ -40,4 +42,13 @@ interface IAmpli {
     event SetFee(PoolId indexed id, uint8 feeRatio, uint8 ownerFeeRatio);
     event SetFungibleCollateral(PoolId indexed id, uint256 indexed assetId, address indexed asset, uint256 lltv);
     event SetNonFungibleCollateral(PoolId indexed id, address indexed asset, uint256 lltv);
+
+    function unlock(bytes calldata data) external returns (bytes memory result);
+    function supplyFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
+        external;
+    function supplyNonFungibleCollateral(PoolKey memory key, uint256 positionId, NonFungibleAssetId nonFungibleAssetId)
+        external;
+    function withdrawFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
+        external;
+    function borrow(PoolKey memory key, uint256 positionId, address receiver, BorrowShare share) external;
 }

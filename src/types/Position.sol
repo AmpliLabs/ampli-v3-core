@@ -11,6 +11,7 @@ import {BorrowShare} from "./BorrowShare.sol";
 
 struct Position {
     address owner;
+    address authorizedOperator;
     BorrowShare borrowShares;
     FungibleConfigurationMap fungibles;
     mapping(uint256 id => uint256 balance) collateralFungibleAssets;
@@ -22,10 +23,15 @@ using PositionLibrary for Position global;
 library PositionLibrary {
     using Math for uint256;
 
+    error PositionNotAuthorized();
     error PositionAlreadyContainsNonFungibleItem();
     error PositionDoesNotContainNonFungibleItem();
 
     uint256 constant ORACLE_PRICE_SCALE = 1e36;
+
+    function checkSenderAuthorized(Position storage self) internal view {
+        require(self.owner == msg.sender || self.authorizedOperator == msg.sender, PositionNotAuthorized());
+    }
 
     function addFungible(Position storage self, uint256 fungibleAssetId, uint256 amount) internal {
         self.collateralFungibleAssets[fungibleAssetId] += amount;
@@ -77,7 +83,10 @@ library PositionLibrary {
         uint256 totalBorrowAsset,
         BorrowShare totalBorrowShare
     ) internal view returns (bool, uint256, uint256) {
-        if (self.fungibles.isZero() && (self.nonFungibleAssets.length() == 0)) {
+        if (
+            self.fungibles.isZero() && (self.nonFungibleAssets.length() == 0)
+                && BorrowShare.unwrap(self.borrowShares) != 0
+        ) {
             return (false, 0, 0);
         }
 
