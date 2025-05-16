@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.29;
 
-import {BaseHook, Hooks, IPoolManager, BeforeSwapDelta, BalanceDelta} from "./BaseHook.sol";
 import {Extsload} from "./Extsload.sol";
 import {IAmpli} from "./interfaces/IAmpli.sol";
 import {IIrm} from "./interfaces/IIrm.sol";
 import {IOracle} from "./interfaces/IOracle.sol";
+import {IPegTokenFactory} from "./interfaces/IPegTokenFactory.sol";
 import {IUnlockCallback} from "./interfaces/callback/IUnlockCallback.sol";
-import {PegToken} from "./tokenization/PegToken.sol";
 import {Pool} from "./types/Pool.sol";
 import {Locker} from "./types/Locker.sol";
 import {NonFungibleAssetId} from "./types/NonFungibleAssetId.sol";
@@ -15,11 +14,13 @@ import {BorrowShare} from "./types/BorrowShare.sol";
 import {PoolId} from "v4-core/types/PoolId.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency} from "v4-core/types/Currency.sol";
-import {IHooks} from "v4-core/interfaces/IHooks.sol";
-import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
+import {IHooks, IPoolManager, BeforeSwapDelta, BalanceDelta} from "v4-core/interfaces/IHooks.sol";
 
-contract Ampli is IAmpli, BaseHook, Extsload {
-    using StateLibrary for IPoolManager;
+contract Ampli is IAmpli, Extsload {
+    error NotPoolManager();
+
+    IPoolManager public immutable poolManager;
+    IPegTokenFactory public immutable factory;
 
     mapping(PoolId id => Pool) internal _pools;
 
@@ -29,7 +30,15 @@ contract Ampli is IAmpli, BaseHook, Extsload {
     }
 
     //Hooks.Permissions(false, false, true, false, true, false, true, true, false, false, false, false, false, false)
-    constructor(IPoolManager manager) BaseHook(manager) {}
+    constructor(IPoolManager _manager, IPegTokenFactory _factory) {
+        poolManager = _manager;
+        factory = _factory;
+    }
+
+    modifier onlyPoolManager() {
+        if (msg.sender != address(poolManager)) revert NotPoolManager();
+        _;
+    }
 
     function unlock(bytes calldata data) external returns (bytes memory result) {
         require(!Locker.isUnlocked(), AlreadyUnlocked());
@@ -57,7 +66,7 @@ contract Ampli is IAmpli, BaseHook, Extsload {
         require(ownerFeeRatio < 100, InvaildFeeRatio());
         require(feeRatio < 100, InvaildFeeRatio());
 
-        address pegToken = address(new PegToken{salt: salt}(underlying, address(this)));
+        address pegToken = factory.createPegToken(underlying, address(this), salt);
         require(pegToken < underlying, InvaildPegTokenSalt());
 
         PoolKey memory key = PoolKey({
@@ -236,10 +245,10 @@ contract Ampli is IAmpli, BaseHook, Extsload {
         PoolKey calldata key,
         IPoolManager.ModifyLiquidityParams calldata params,
         bytes calldata /*hookData*/
-    ) external override onlyPoolManager returns (bytes4) {
+    ) external onlyPoolManager returns (bytes4) {
         if (sender != address(this)) {
             PoolId id = key.toId();
-            (, int24 tick,,) = poolManager.getSlot0(id);
+            (, int24 tick,,) = getSlot0(poolManager, id);
 
             if (tick >= params.tickLower && tick < params.tickUpper) {
                 _pools[id].accrueInterest(key, true);
@@ -254,10 +263,10 @@ contract Ampli is IAmpli, BaseHook, Extsload {
         PoolKey calldata key,
         IPoolManager.ModifyLiquidityParams calldata params,
         bytes calldata /*hookData*/
-    ) external override onlyPoolManager returns (bytes4) {
+    ) external onlyPoolManager returns (bytes4) {
         if (sender != address(this)) {
             PoolId id = key.toId();
-            (, int24 tick,,) = poolManager.getSlot0(id);
+            (, int24 tick,,) = getSlot0(poolManager, id);
 
             if (tick >= params.tickLower && tick < params.tickUpper) {
                 _pools[id].accrueInterest(key, false);
@@ -269,7 +278,6 @@ contract Ampli is IAmpli, BaseHook, Extsload {
 
     function beforeSwap(address sender, PoolKey calldata key, IPoolManager.SwapParams calldata, bytes calldata)
         external
-        override
         onlyPoolManager
         returns (bytes4, BeforeSwapDelta, uint24)
     {
@@ -287,9 +295,39 @@ contract Ampli is IAmpli, BaseHook, Extsload {
         IPoolManager.SwapParams calldata, /*params*/
         BalanceDelta, /*delta*/
         bytes calldata /*hookData*/
-    ) external view override onlyPoolManager returns (bytes4, int128) {
+    ) external view onlyPoolManager returns (bytes4, int128) {
         // TODO: send price to oracle
         // TODO: if price > 1, swap peg token
         return (this.afterSwap.selector, 0);
+    }
+
+    /* POOL MANAGER SLOT */
+    function _getPoolStateSlot(PoolId poolId) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(PoolId.unwrap(poolId), bytes32(uint256(6))));
+    }
+
+    function getSlot0(IPoolManager manager, PoolId poolId)
+        internal
+        view
+        returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)
+    {
+        // slot key of Pool.State value: `pools[poolId]`
+        bytes32 stateSlot = _getPoolStateSlot(poolId);
+
+        bytes32 data = manager.extsload(stateSlot);
+
+        //   24 bits  |24bits|24bits      |24 bits|160 bits
+        // 0x000000   |000bb8|000000      |ffff75 |0000000000000000fe3aa841ba359daa0ea9eff7
+        // ---------- | fee  |protocolfee | tick  | sqrtPriceX96
+        assembly ("memory-safe") {
+            // bottom 160 bits of data
+            sqrtPriceX96 := and(data, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
+            // next 24 bits of data
+            tick := signextend(2, shr(160, data))
+            // next 24 bits of data
+            protocolFee := and(shr(184, data), 0xFFFFFF)
+            // last 24 bits of data
+            lpFee := and(shr(208, data), 0xFFFFFF)
+        }
     }
 }
