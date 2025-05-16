@@ -44,6 +44,17 @@ interface IAmpli is IExtsload {
     event SetNonFungibleCollateral(PoolId indexed id, address indexed asset, uint256 lltv);
 
     function unlock(bytes calldata data) external returns (bytes memory result);
+    function initialize(
+        address underlying,
+        address owner,
+        IIrm irm,
+        IOracle oracle,
+        uint8 feeRatio,
+        uint8 ownerFeeRatio,
+        bytes32 salt
+    ) external;
+    function updateAuthorization(PoolKey memory key, uint256 positionId, address owner, address authorizedOperator)
+        external;
     function supplyFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
         external;
     function supplyNonFungibleCollateral(PoolKey memory key, uint256 positionId, NonFungibleAssetId nonFungibleAssetId)

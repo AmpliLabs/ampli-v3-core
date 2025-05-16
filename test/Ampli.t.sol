@@ -29,14 +29,14 @@ contract AmpliTest is Test, Deployers {
         deployIrmAndOracle();
 
         poolKey = PoolKey({
-            currency0: Currency.wrap(address(0xA19570ac9E7bB35eAABe7a2e97B2941c200b3667)),
+            currency0: Currency.wrap(address(0x7b2832648289AfF9bd871aE660BaD0A678C1D32b)),
             currency1: Currency.wrap(address(tokenMock)),
             fee: 100, // 0.01%
             tickSpacing: 1,
             hooks: IHooks(address(0xFb46d30c9B3ACc61d714D167179748FD01E09aC0))
         });
 
-        pegToken = IERC20(address(0xA19570ac9E7bB35eAABe7a2e97B2941c200b3667));
+        pegToken = IERC20(address(0x7b2832648289AfF9bd871aE660BaD0A678C1D32b));
 
         ampli.initialize(address(tokenMock), address(this), irm, oracle, 2, 1, hex"ff");
 

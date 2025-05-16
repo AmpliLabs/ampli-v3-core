@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import {Test, console} from "forge-std/Test.sol";
 import {Ampli} from "src/Ampli.sol";
+import {PegTokenFactory} from "src/PegTokenFactory.sol";
 import {PegToken} from "src/tokenization/PegToken.sol";
 import {TestERC20} from "test/mock/TestERC20.sol";
 import {OracleMock} from "test/mock/OracleMock.sol";
@@ -23,9 +24,12 @@ contract Deployers is Test {
     V4RouterHelper public v4RouterHelper;
 
     function deployAmpliWithActionRouter() public {
+        PegTokenFactory factory = new PegTokenFactory{salt: hex"00"}();
         address mockAmpli = address(0xFb46d30c9B3ACc61d714D167179748FD01E09aC0);
         vm.label(mockAmpli, "Ampli");
-        deployCodeTo("Ampli.sol", abi.encode(address(0x498581fF718922c3f8e6A244956aF099B2652b2b)), mockAmpli);
+        deployCodeTo(
+            "Ampli.sol", abi.encode(address(0x498581fF718922c3f8e6A244956aF099B2652b2b), address(factory)), mockAmpli
+        );
         ampli = Ampli(mockAmpli);
 
         v4MiniRouter = new V4MiniRouter(address(manager));
