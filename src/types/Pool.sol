@@ -175,6 +175,10 @@ library PoolLibrary {
         position.borrow(share);
 
         borrowAsset = share.toAssetsDown(self.totalBorrowAssets, self.totalBorrowShares);
+
+        self.totalBorrowAssets += borrowAsset;
+        self.totalBorrowShares = self.totalBorrowShares + share;
+
         IPegToken(Currency.unwrap(poolKey.currency0)).mint(receiver, borrowAsset);
     }
 
@@ -186,6 +190,10 @@ library PoolLibrary {
         position.repay(share);
 
         repayAsset = share.toAssetsUp(self.totalBorrowAssets, self.totalBorrowShares);
+
+        self.totalBorrowAssets -= repayAsset;
+        self.totalBorrowShares = self.totalBorrowShares - share;
+        
         IPegToken(Currency.unwrap(poolKey.currency0)).burn(msg.sender, repayAsset);
     }
 
