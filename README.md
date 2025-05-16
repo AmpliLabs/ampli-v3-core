@@ -1,7 +1,7 @@
 # Ampli
 
-**Permissionless platform for on-demand leverage**  
-_Ampli is the most expressive, composable, and frictionless margin protocol. Built on Uniswap v4 for DeFi power users._
+**The permissionless, self-custodial margin protocol**  
+_Built on Uniswap v4 for DeFi power users_
 
 ---
 
