@@ -2,6 +2,7 @@
 pragma solidity 0.8.29;
 
 import {BaseHook, Hooks, IPoolManager, BeforeSwapDelta, BalanceDelta} from "./BaseHook.sol";
+import {Extsload} from "./Extsload.sol";
 import {IAmpli} from "./interfaces/IAmpli.sol";
 import {IIrm} from "./interfaces/IIrm.sol";
 import {IOracle} from "./interfaces/IOracle.sol";
@@ -17,7 +18,7 @@ import {Currency} from "v4-core/types/Currency.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 
-contract Ampli is IAmpli, BaseHook {
+contract Ampli is IAmpli, BaseHook, Extsload {
     using StateLibrary for IPoolManager;
 
     mapping(PoolId id => Pool) internal _pools;

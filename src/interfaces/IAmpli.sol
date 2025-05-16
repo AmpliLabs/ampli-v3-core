@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.0;
 
+import {IExtsload} from "./IExtsload.sol";
 import {NonFungibleAssetId} from "../types/NonFungibleAssetId.sol";
 import {BorrowShare} from "../types/BorrowShare.sol";
 import {IIrm} from "../interfaces/IIrm.sol";
@@ -9,7 +10,7 @@ import {PoolId} from "v4-core/types/PoolId.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency} from "v4-core/types/Currency.sol";
 
-interface IAmpli {
+interface IAmpli is IExtsload {
     error ManagerLocked();
     error AlreadyUnlocked();
     error InvaildOwner();
