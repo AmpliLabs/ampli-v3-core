@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.29;
 
-// TODO: Use Currency in Uniswap v4 to replace asset
+import {Currency} from "v4-core/types/Currency.sol";
+
 struct FungibleAssetParams {
-    address asset;
+    Currency asset;
     uint96 lltv;
 }

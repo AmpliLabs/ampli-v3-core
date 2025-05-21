@@ -2,22 +2,31 @@
 pragma solidity 0.8.29;
 
 import {Extsload} from "./Extsload.sol";
+import {Exttload} from "./Exttload.sol";
 import {IAmpli} from "./interfaces/IAmpli.sol";
 import {IIrm} from "./interfaces/IIrm.sol";
 import {IOracle} from "./interfaces/IOracle.sol";
 import {IPegTokenFactory} from "./interfaces/IPegTokenFactory.sol";
+import {IPegToken} from "./interfaces/IPegToken.sol";
 import {IUnlockCallback} from "./interfaces/callback/IUnlockCallback.sol";
 import {Pool} from "./types/Pool.sol";
 import {Locker} from "./types/Locker.sol";
 import {NonFungibleAssetId} from "./types/NonFungibleAssetId.sol";
 import {BorrowShare} from "./types/BorrowShare.sol";
+import {SafeCast} from "./libraries/SafeCast.sol";
 import {PoolId} from "v4-core/types/PoolId.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency} from "v4-core/types/Currency.sol";
+import {CurrencyDelta} from "v4-core/libraries/CurrencyDelta.sol";
 import {IHooks, IPoolManager, BeforeSwapDelta, BalanceDelta} from "v4-core/interfaces/IHooks.sol";
 
-contract Ampli is IAmpli, Extsload {
-    error NotPoolManager();
+contract Ampli is IAmpli, Extsload, Exttload {
+    using CurrencyDelta for Currency;
+    using SafeCast for uint256;
+
+    uint256 transient nonzeroDeltaCount;
+    Currency transient currencyReserve;
+    uint256 transient currencyReservesOf;
 
     IPoolManager public immutable poolManager;
     IPegTokenFactory public immutable factory;
@@ -47,11 +56,14 @@ contract Ampli is IAmpli, Extsload {
 
         result = IUnlockCallback(msg.sender).unlockCallback(data);
 
+        require(nonzeroDeltaCount == 0, CurrencyNotSettled());
         for (uint256 i = 0; i < Locker.itemsLength(); i++) {
             (PoolId id, uint256 positionId) = Locker.getCheckOutItem(i);
             _pools[id].isHealthy(positionId);
         }
         Locker.lock();
+
+        // TODO: Check peg token balance
     }
 
     function initialize(
@@ -62,11 +74,11 @@ contract Ampli is IAmpli, Extsload {
         uint8 feeRatio,
         uint8 ownerFeeRatio,
         bytes32 salt
-    ) external {
+    ) external returns (address pegToken) {
         require(ownerFeeRatio < 100, InvaildFeeRatio());
         require(feeRatio < 100, InvaildFeeRatio());
 
-        address pegToken = factory.createPegToken(underlying, address(this), salt);
+        pegToken = factory.createPegToken(underlying, address(this), salt);
         require(pegToken < underlying, InvaildPegTokenSalt());
 
         PoolKey memory key = PoolKey({
@@ -96,7 +108,7 @@ contract Ampli is IAmpli, Extsload {
         emit SetOwner(id, newOwner);
     }
 
-    function enableFungibleCollateral(PoolKey memory key, address reserve, uint96 lltv) external {
+    function enableFungibleCollateral(PoolKey memory key, Currency reserve, uint96 lltv) external {
         PoolId id = key.toId();
         Pool storage pool = _pools[id];
         pool.onlyOwner();
@@ -109,9 +121,9 @@ contract Ampli is IAmpli, Extsload {
         PoolId id = key.toId();
         Pool storage pool = _pools[id];
         pool.onlyOwner();
-        address fungibleAddress = pool.updateFungibleCollateral(fungibleAssetId, lltv);
+        Currency fungible = pool.updateFungibleCollateral(fungibleAssetId, lltv);
 
-        emit SetFungibleCollateral(id, fungibleAssetId, fungibleAddress, lltv);
+        emit SetFungibleCollateral(id, fungibleAssetId, fungible, lltv);
     }
 
     function updateNonFungibleCollateral(PoolKey memory key, address reserve, uint256 lltv) external {
@@ -146,14 +158,17 @@ contract Ampli is IAmpli, Extsload {
 
     function supplyFungibleCollateral(PoolKey memory key, uint256 positionId, uint256 fungibleAssetId, uint256 amount)
         external
+        onlyWhenUnlocked
     {
         PoolId id = key.toId();
         Pool storage pool = _pools[id];
 
         pool.checkPoolInitialized();
-        address fungibleAddress = pool.supplyFungibleCollateral(key, positionId, fungibleAssetId, amount);
+        Currency fungible = pool.supplyFungibleCollateral(key, positionId, fungibleAssetId, amount);
 
-        emit SupplyFungibleCollateral(id, positionId, fungibleAddress, amount);
+        _accountDelta(fungible, -(amount.toInt128()), msg.sender);
+
+        emit SupplyFungibleCollateral(id, positionId, fungible, amount);
     }
 
     function supplyNonFungibleCollateral(PoolKey memory key, uint256 positionId, NonFungibleAssetId nonFungibleAssetId)
@@ -170,29 +185,30 @@ contract Ampli is IAmpli, Extsload {
 
     /* BORROW MANAGEMENT */
 
-    function borrow(PoolKey memory key, uint256 positionId, address receiver, BorrowShare share)
-        external
-        onlyWhenUnlocked
-    {
+    function borrow(PoolKey memory key, uint256 positionId, BorrowShare share) external onlyWhenUnlocked {
         PoolId id = key.toId();
         Pool storage pool = _pools[id];
 
         pool.checkPoolInitialized();
-        uint256 borrowAsset = pool.borrow(key, receiver, positionId, share);
+        uint256 borrowAmount = pool.borrow(key, positionId, share);
 
         Locker.checkOutItems(id, positionId);
 
-        emit Borrow(id, positionId, receiver, borrowAsset, share);
+        _accountDelta(key.currency0, borrowAmount.toInt128(), msg.sender);
+
+        emit Borrow(id, positionId, borrowAmount, share);
     }
 
-    function repay(PoolKey memory key, uint256 positionId, BorrowShare share) external {
+    function repay(PoolKey memory key, uint256 positionId, BorrowShare share) external onlyWhenUnlocked {
         PoolId id = key.toId();
         Pool storage pool = _pools[id];
 
         pool.checkPoolInitialized();
-        uint256 repayAsset = pool.repay(key, positionId, share);
+        uint256 repayAmount = pool.repay(key, positionId, share);
 
-        emit Repay(id, positionId, repayAsset, share);
+        _accountDelta(key.currency0, -(repayAmount.toInt128()), msg.sender);
+
+        emit Repay(id, positionId, repayAmount, share);
     }
 
     /* WITHDRAW MANAGEMENT */
@@ -205,10 +221,12 @@ contract Ampli is IAmpli, Extsload {
         Pool storage pool = _pools[id];
 
         pool.checkPoolInitialized();
-        address fungibleAddress = pool.withdrawFungibleCollateral(key, positionId, fungibleAssetId, amount);
+        Currency fungible = pool.withdrawFungibleCollateral(key, positionId, fungibleAssetId, amount);
         Locker.checkOutItems(id, positionId);
 
-        emit WithdrawFungibleCollateral(id, positionId, fungibleAddress, amount);
+        _accountDelta(fungible, amount.toInt128(), msg.sender);
+
+        emit WithdrawFungibleCollateral(id, positionId, fungible, amount);
     }
 
     function withdrawNonFungibleCollateral(
@@ -229,13 +247,14 @@ contract Ampli is IAmpli, Extsload {
     /* LIQUIDATION */
 
     // TODO: Liquidate in unlock with checkout
-    function liquidate(PoolKey memory key, uint256 positionId) external {
+    function liquidate(PoolKey memory key, uint256 positionId) external onlyWhenUnlocked {
         PoolId id = key.toId();
         Pool storage pool = _pools[id];
 
         pool.checkPoolInitialized();
         (uint256 repaidAsset, int256 bedDebtAsset) = pool.liquidate(key, positionId);
 
+        _accountDelta(key.currency0, -(repaidAsset.toInt128()), msg.sender);
         emit Liquidate(id, positionId, repaidAsset, uint256(-bedDebtAsset));
     }
 
@@ -328,6 +347,85 @@ contract Ampli is IAmpli, Extsload {
             protocolFee := and(shr(184, data), 0xFFFFFF)
             // last 24 bits of data
             lpFee := and(shr(208, data), 0xFFFFFF)
+        }
+    }
+
+    /* BalanceDelta */
+    function sync(Currency currency) external {
+        // address(0) is used for the native currency
+        if (currency.isAddressZero()) {
+            // The reserves balance is not used for native settling, so we only need to reset the currency.
+            currencyReserve = Currency.wrap(address(0));
+        } else {
+            uint256 balance = currency.balanceOfSelf();
+
+            currencyReserve = currency;
+            currencyReservesOf = balance;
+        }
+    }
+
+    function take(Currency currency, address to, uint256 amount) external onlyWhenUnlocked {
+        unchecked {
+            // negation must be safe as amount is not negative
+            _accountDelta(currency, -(amount.toInt128()), msg.sender);
+            if (factory.isPegToken(Currency.unwrap(currency))) {
+                IPegToken(Currency.unwrap(currency)).mint(to, amount);
+            } else {
+                currency.transfer(to, amount);
+            }
+        }
+    }
+
+    function settle() external payable onlyWhenUnlocked returns (uint256) {
+        return _settle(msg.sender);
+    }
+
+    function settleFor(address recipient) external payable onlyWhenUnlocked returns (uint256) {
+        return _settle(recipient);
+    }
+
+    function clear(Currency currency, uint256 amount) external onlyWhenUnlocked {
+        int256 current = currency.getDelta(msg.sender);
+        // Because input is `uint256`, only positive amounts can be cleared.
+        int128 amountDelta = amount.toInt128();
+        // if (amountDelta != current)
+        require(amountDelta == current, MustClearExactPositiveDelta());
+        // negation must be safe as amountDelta is positive
+        unchecked {
+            _accountDelta(currency, -(amountDelta), msg.sender);
+        }
+    }
+
+    function _settle(address recipient) internal returns (uint256 paid) {
+        Currency currency = currencyReserve;
+        if (currency.isAddressZero()) {
+            paid = msg.value;
+        } else {
+            require(msg.value == 0, NonzeroNativeValue());
+
+            uint256 reservesBefore = currencyReservesOf;
+            uint256 reservesNow = currency.balanceOfSelf();
+
+            if (factory.isPegToken(Currency.unwrap(currency))) {
+                IPegToken(Currency.unwrap(currency)).burn(address(this), reservesNow);
+            }
+
+            paid = reservesNow - reservesBefore;
+            currencyReserve = Currency.wrap(address(0));
+        }
+
+        _accountDelta(currency, paid.toInt128(), recipient);
+    }
+
+    function _accountDelta(Currency currency, int128 delta, address target) internal {
+        if (delta == 0) return;
+
+        (int256 previous, int256 next) = currency.applyDelta(target, delta);
+
+        if (next == 0) {
+            nonzeroDeltaCount -= 1;
+        } else if (previous == 0) {
+            nonzeroDeltaCount += 1;
         }
     }
 }
