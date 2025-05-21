@@ -28,17 +28,17 @@ contract AmpliTest is Test, Deployers {
         deployMockERC20();
         deployIrmAndOracle();
 
+        address pegTokenAddr = ampli.initialize(address(tokenMock), address(this), irm, oracle, 2, 1, hex"ff");
+
         poolKey = PoolKey({
-            currency0: Currency.wrap(address(0x7b2832648289AfF9bd871aE660BaD0A678C1D32b)),
+            currency0: Currency.wrap(address(pegTokenAddr)),
             currency1: Currency.wrap(address(tokenMock)),
             fee: 100, // 0.01%
             tickSpacing: 1,
             hooks: IHooks(address(0xFb46d30c9B3ACc61d714D167179748FD01E09aC0))
         });
 
-        pegToken = IERC20(address(0x7b2832648289AfF9bd871aE660BaD0A678C1D32b));
-
-        ampli.initialize(address(tokenMock), address(this), irm, oracle, 2, 1, hex"ff");
+        pegToken = IERC20(address(pegTokenAddr));
 
         actionsRouter.approve(address(tokenMock));
         actionsRouter.approve(address(pegToken));
@@ -58,20 +58,14 @@ contract AmpliTest is Test, Deployers {
     function test_supplyAndWithdrawFungibleCollateral() public {
         ampli.updateAuthorization(poolKey, 1, address(this), address(actionsRouter));
 
-        Actions[] memory actions = new Actions[](4);
-        bytes[] memory params = new bytes[](4);
+        Actions[] memory actions = new Actions[](2);
+        bytes[] memory params = new bytes[](2);
 
-        actions[0] = Actions.TRANSFER_IN_FUNGIBLE_ASSET;
-        params[0] = abi.encode(address(tokenMock), address(this), 1 ether);
+        actions[0] = Actions.SUPPLY_FUNGIBLE_COLLATERAL;
+        params[0] = abi.encode(poolKey, 1, 0, 1 ether);
 
-        actions[1] = Actions.SUPPLY_FUNGIBLE_COLLATERAL;
+        actions[1] = Actions.WITHDRAW_FUNGIBLE_COLLATERAL;
         params[1] = abi.encode(poolKey, 1, 0, 1 ether);
-
-        actions[2] = Actions.WITHDRAW_FUNGIBLE_COLLATERAL;
-        params[2] = abi.encode(poolKey, 1, 0, 1 ether);
-
-        actions[3] = Actions.TRANSFER_OUT_FUNGIBLE_ASSET;
-        params[3] = abi.encode(address(tokenMock), address(this), 1 ether);
 
         tokenMock.mint(address(this), 1 ether);
 
@@ -80,31 +74,42 @@ contract AmpliTest is Test, Deployers {
         assertEq(tokenMock.balanceOf(address(this)), 1 ether);
     }
 
+    function _supplyCollateral(address sender, uint256 positionId, uint256 amount) public {
+        Actions[] memory actions = new Actions[](2);
+        bytes[] memory params = new bytes[](2);
+
+        actions[0] = Actions.SUPPLY_FUNGIBLE_COLLATERAL;
+        params[0] = abi.encode(poolKey, positionId, 0, amount);
+
+        actions[1] = Actions.SETTLE_ALL;
+        params[1] = abi.encode(sender, poolKey.currency1);
+
+        actionsRouter.executeActions(actions, params);
+    }
+
     function test_borrow() public {
         ampli.updateAuthorization(poolKey, 1, address(this), address(actionsRouter));
         tokenMock.mint(address(this), 10 ether);
 
-        ampli.supplyFungibleCollateral(poolKey, 1, 0, 10 ether);
+        // ampli.supplyFungibleCollateral(poolKey, 1, 0, 10 ether);
+        _supplyCollateral(address(this), 1, 10 ether);
         BorrowShare borrowed = BorrowShareLibrary.toSharesDown(1 ether, 0, BorrowShare.wrap(0));
 
-        Actions[] memory actions = new Actions[](1);
-        bytes[] memory params = new bytes[](1);
+        Actions[] memory actions = new Actions[](2);
+        bytes[] memory params = new bytes[](2);
 
         actions[0] = Actions.BORROW;
         params[0] = abi.encode(poolKey, 1, borrowed);
 
+        actions[1] = Actions.TAKE_ALL;
+        params[1] = abi.encode(address(this), address(pegToken));
+
         actionsRouter.executeActions(actions, params);
 
-        assertEq(pegToken.balanceOf(address(actionsRouter)), 1 ether);
+        assertEq(pegToken.balanceOf(address(this)), 1 ether);
     }
 
-    function _supplyMaxFungibleCollateral(uint256 amount) public {
-        ampli.updateAuthorization(poolKey, 1, address(this), address(actionsRouter));
-
-        ampli.supplyFungibleCollateral(poolKey, 1, 0, amount);
-    }
-
-    function _borrowPegToken(uint256 amount) public {
+    function _borrowPegToken(address receiver, uint256 amount) public {
         BorrowShare borrowed = BorrowShareLibrary.toSharesDown(amount, 0, BorrowShare.wrap(0));
 
         Actions[] memory actions = new Actions[](2);
@@ -113,16 +118,18 @@ contract AmpliTest is Test, Deployers {
         actions[0] = Actions.BORROW;
         params[0] = abi.encode(poolKey, 1, borrowed);
 
-        actions[1] = Actions.TRANSFER_OUT_FUNGIBLE_ASSET;
-        params[1] = abi.encode(address(pegToken), address(this), amount);
+        actions[1] = Actions.TAKE_ALL;
+        params[1] = abi.encode(receiver, address(pegToken));
 
         actionsRouter.executeActions(actions, params);
     }
 
     function test_borrowAndSupply() public {
+        ampli.updateAuthorization(poolKey, 1, address(this), address(actionsRouter));
         tokenMock.mint(address(this), 1500 ether);
-        _supplyMaxFungibleCollateral(1000 ether);
-        _borrowPegToken(600 ether);
+
+        _supplyCollateral(address(this), 1, 1000 ether);
+        _borrowPegToken(address(this), 600 ether);
         v4RouterHelper.addLiquidity(address(this), poolKey);
 
         address user = makeAddr("user");
@@ -130,24 +137,31 @@ contract AmpliTest is Test, Deployers {
         ampli.updateAuthorization(poolKey, 2, user, address(actionsRouter));
 
         tokenMock.mint(user, 1 ether);
-        tokenMock.approve(address(ampli), type(uint256).max);
-        ampli.supplyFungibleCollateral(poolKey, 2, 0, 0.5 ether);
+        tokenMock.approve(address(actionsRouter), type(uint256).max);
+
+        _supplyCollateral(user, 2, 1 ether);
 
         (uint256 totalBorrow, BorrowShare totalShare) = IAmpli(address(ampli)).getPoolBorrow(poolKey.toId());
 
         BorrowShare borrowed = BorrowShareLibrary.toSharesDown(5 ether, totalBorrow, totalShare);
 
-        Actions[] memory actions = new Actions[](3);
-        bytes[] memory params = new bytes[](3);
+        Actions[] memory actions = new Actions[](5);
+        bytes[] memory params = new bytes[](5);
 
         actions[0] = Actions.BORROW;
         params[0] = abi.encode(poolKey, 2, borrowed);
 
-        actions[1] = Actions.V4_SWAP;
-        params[1] = abi.encode(poolKey, -5 ether);
+        actions[1] = Actions.TAKE_ALL;
+        params[1] = abi.encode(address(actionsRouter), address(pegToken));
 
-        actions[2] = Actions.SUPPLY_FUNGIBLE_COLLATERAL;
-        params[2] = abi.encode(poolKey, 2, 0, 0);
+        actions[2] = Actions.V4_SWAP;
+        params[2] = abi.encode(poolKey, -5 ether);
+
+        actions[3] = Actions.SUPPLY_FUNGIBLE_COLLATERAL;
+        params[3] = abi.encode(poolKey, 2, 0, 0);
+
+        actions[4] = Actions.SETTLE_ALL;
+        params[4] = abi.encode(address(actionsRouter), poolKey.currency1);
 
         actionsRouter.executeActions(actions, params);
         vm.stopPrank();
