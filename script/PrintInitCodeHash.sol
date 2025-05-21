@@ -32,7 +32,7 @@ contract PrintInitCodeHash is Script {
 
     function run() public pure {
         // Hook constructor arguments
-        bytes memory constructorArguments = abi.encode(PM_ADDRESS, 0x22DBB04BB1D47DCa6016284eec5C0FA434b96Bc1);
+        bytes memory constructorArguments = abi.encode(PM_ADDRESS, 0xB2Cf8DCCfE32B357fAe9AE2C6bCD35FA43E03d6c);
 
         // Print Init Code Hash
         bytes memory creationCodeWithConstructorArguments =

@@ -38,7 +38,7 @@ contract RouterDeployScript is Script {
         ampli.supplyFungibleCollateral(poolKey, 1, 0, amount);
     }
 
-    function _borrowPegToken(uint256 amount) public {
+    function _borrowPegToken(address receiver, uint256 amount) public {
         BorrowShare borrowed = BorrowShareLibrary.toSharesDown(amount, 0, BorrowShare.wrap(0));
 
         Actions[] memory actions = new Actions[](2);
@@ -47,8 +47,8 @@ contract RouterDeployScript is Script {
         actions[0] = Actions.BORROW;
         params[0] = abi.encode(poolKey, 1, borrowed);
 
-        actions[1] = Actions.TRANSFER_OUT_FUNGIBLE_ASSET;
-        params[1] = abi.encode(address(pegToken), address(deployer), amount);
+        actions[1] = Actions.TAKE_ALL;
+        params[1] = abi.encode(receiver, address(pegToken));
 
         actionsRouter.executeActions(actions, params);
     }
@@ -71,14 +71,14 @@ contract RouterDeployScript is Script {
         oracle.setFungibleAssetPrice(0, 1e36);
         oracle.setFungibleAssetPrice(1, 1e36);
 
-        ampli.initialize(address(tokenMock), deployer, irm, oracle, 2, 1, hex"ff");
+        address pegTokenAddr = ampli.initialize(address(tokenMock), deployer, irm, oracle, 2, 1, hex"ff");
 
         actionsRouter.approve(address(tokenMock));
         tokenMock.approve(address(ampli), type(uint256).max);
         tokenMock.approve(address(actionsRouter), type(uint256).max);
         tokenMock.approve(address(v4MiniRouter), type(uint256).max);
 
-        pegToken = IERC20(address(0x8AB3F86DE96cB1AcCB533DFA5099a945Ec2ec764));
+        pegToken = IERC20(pegTokenAddr);
 
         poolKey = PoolKey({
             currency0: Currency.wrap(address(pegToken)),
@@ -92,7 +92,7 @@ contract RouterDeployScript is Script {
 
         tokenMock.mint(address(deployer), 1500 ether);
         _supplyMaxFungibleCollateral(1000 ether);
-        _borrowPegToken(600 ether);
+        _borrowPegToken(address(deployer), 600 ether);
 
         actionsRouter.approve(address(pegToken));
         pegToken.approve(address(v4MiniRouter), type(uint256).max);
