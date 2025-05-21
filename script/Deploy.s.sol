@@ -8,10 +8,12 @@ import {PegTokenFactory} from "src/PegTokenFactory.sol";
 import {IPegTokenFactory} from "src/interfaces/IPegTokenFactory.sol";
 
 contract DeployPegToken is Script {
+    bytes32 constant salt = hex"00";
+
     function run() public returns (PegTokenFactory factory) {
         vm.createSelectFork("Base");
         vm.startBroadcast(vm.envUint("DEPLOY_PRIVATE"));
-        factory = new PegTokenFactory();
+        factory = new PegTokenFactory{salt: salt}();
         vm.stopBroadcast();
     }
 }
@@ -19,11 +21,11 @@ contract DeployPegToken is Script {
 contract DeployHook is Script {
     // Ampli public ampli;
     IPoolManager constant PM_ADDRESS = IPoolManager(0x498581fF718922c3f8e6A244956aF099B2652b2b);
-    bytes32 constant salt = 0xc21528bef3c455520a5a08e091f63d93721e87eee729bcfd93042355ee21ea99;
-    address constant factory = address(0x22DBB04BB1D47DCa6016284eec5C0FA434b96Bc1);
+    bytes32 constant salt = 0xeda74532bf55ade24954b3c5a283192477d5b97ddaa327b5089ec44d766543fa;
+    address constant factory = address(0xB2Cf8DCCfE32B357fAe9AE2C6bCD35FA43E03d6c);
 
     function run() public returns (Ampli ampli) {
-        vm.createSelectFork("Base");
+        // vm.createSelectFork("Base");
         vm.startBroadcast(vm.envUint("DEPLOY_PRIVATE"));
         ampli = new Ampli{salt: salt}(PM_ADDRESS, IPegTokenFactory(factory));
         vm.stopBroadcast();

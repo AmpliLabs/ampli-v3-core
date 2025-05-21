@@ -25,7 +25,7 @@ contract BorrowActionScript is Script {
 
     function setUp() public {
         deployer = vm.envAddress("DEPLOY_ADDRESS");
-        
+
         vm.label(address(0xC546DE80e76E62c849eD0Af412354E588DA5DfA5), "TestToken");
         vm.label(address(0x8AB3F86DE96cB1AcCB533DFA5099a945Ec2ec764), "PegToken");
         poolKey = PoolKey({

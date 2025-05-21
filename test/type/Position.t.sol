@@ -7,6 +7,7 @@ import {Position, PositionLibrary} from "../../src/types/Position.sol";
 import {NonFungibleAssetId} from "../../src/types/NonFungibleAssetId.sol";
 import {FungibleAssetParams} from "../../src/types/FungibleAssetParams.sol";
 import {BorrowShare} from "../../src/types/BorrowShare.sol";
+import {Currency} from "v4-core/types/Currency.sol";
 
 contract PositionTest is Test {
     error PositionAlreadyContainsNonFungibleItem();
@@ -21,7 +22,7 @@ contract PositionTest is Test {
 
     function setUp() public {
         oracle = new OracleMock();
-        fungibleAssetParams[0] = FungibleAssetParams({asset: address(20), lltv: 1e6});
+        fungibleAssetParams[0] = FungibleAssetParams({asset: Currency.wrap(address(20)), lltv: 1e6});
         nonFungibleAssetLltv[address(721)] = 1e6;
     }
 
